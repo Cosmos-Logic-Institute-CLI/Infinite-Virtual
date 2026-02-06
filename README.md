@@ -63,6 +63,89 @@ We decouple the display terminal from the traditional "face-mounted screen" into
 > **Principle: Pupil Matching & Afocal Display**
 > Traditional VR involves eyes focusing on a screen, creating focal conflicts. This system converts images into collimated light beams that are projected directly onto the retina via the contact lens. Since the beams are extremely narrow and undergo multi-stage calibration, the system possesses **near-infinite Depth of Field (DoF)**, completely eliminating motion sickness. Furthermore, due to optical path compression, it can achieve a limit clarity of **60-120 PPD** (Pixels Per Degree).
 
+### 📄 Technical Addendum: Photonic Relay & Stochastic Microsaccade Prediction
+
+**Project:** Aether-Link (Visual Subsystem)
+**Classification:** Zero-Latency Retinal Projection Architecture
+
+**I. Hardware Logic: Dual-Stage Coupling Steering**
+To eliminate the massive bulk of traditional optics, we decouple the optical path into a **"Coarse-to-Fine"** hybrid architecture:
+
+**Stage 1: Low-Frequency Macro Steering (Mother Unit)**
+* **Mechanism:** Electromagnetic Voice Coil Motor (VCM) or MEMS mirrors.
+* **Responsibility:** Tracking large-scale ocular rotations (Saccades).
+* **Engineering Note:** Utilizing smartphone-grade OIS (Optical Image Stabilization) components to maintain the light cone within the pupil's general entrance pupil range.
+
+**Stage 2: High-Frequency Solid-State Correction (Child Unit Interaction)**
+* **Mechanism:** LCP (Liquid Crystal Polymer) Beam Steerers.
+* **Responsibility:** Compensating for physiological **Tremor** and **Microsaccades** (30Hz–80Hz).
+* **Advantage:** Zero-inertia adjustment via voltage-controlled refractive index modulation.
+
+**II. Algorithmic Logic: Feed-Forward Stochastic Modeling**
+We abandon "Reactive Tracking" in favor of **"Predictive Occupancy"**:
+
+* **The Saccade Model:** Human eye movement is not random; it follows predictable acceleration/deceleration profiles. Our AI predicts the "Arrival Vector" of the pupil.
+* **The Blur-Buffer (Gaussian Tolerance):** By introducing a Gaussian-weighted diffraction gradient on the contact lens (Child Unit), we create an **optical redundancy zone**. This allows the visual cortex to fuse the image seamlessly even if the physical alignment has a  micro-offset.
+
+**III. Materiality: The "Asymmetric Refit" of Mini-LED Arrays**
+* **Asymmetric Logic:** Utilizing high-density Mini-LEDs as **Point-Light Sources** rather than traditional displays.
+* **Cost-Efficiency:** Repurposing existing $30 backlighting modules through TIR waveguides to achieve 85%+ photonic efficiency, slashing BOM costs by 90% compared to legacy XR headsets.
+
+### 💻 Core Control Logic (Pseudo-Code)
+
+```python
+"""
+Project Aether-Link: Anti-Latency Ocular Control Protocol
+Implementation of Stochastic Prediction & Dual-Stage Light Steering
+"""
+
+class AetherVisualController:
+    def __init__(self):
+        # Load pre-trained Markov models of human ocular tremor spectrum (30Hz-80Hz)
+        self.tremor_model = load_microsaccade_probability_model()
+        self.current_mother_pos = (0, 0) # Mechanical servo position
+        self.fine_steer_angle = (0, 0)   # LCP refractive offset
+
+    def synchronize_optical_relay(self, eye_tracker_raw):
+        """
+        Operational Frequency: 2000Hz (0.5ms sampling rate)
+        """
+        # 1. MACRO STEERING: For large Saccades
+        # Predict the saccadic end-point using feed-forward EMG-trend analysis
+        if eye_tracker_raw.velocity > SACCADE_THRESHOLD:
+            predicted_target = predict_saccade_end_point(eye_tracker_raw)
+            self.move_mechanical_servo(predicted_target) # Low-cost VCM activation
+
+        # 2. PRECISION STEERING: For physiological Tremor
+        # We don't "catch" the tremor; we "bet" on its next probable state
+        # based on spectral density and previous vector.
+        probabilistic_offset = self.tremor_model.predict_next_state(
+            current_v=eye_tracker_raw.micro_velocity,
+            spectrum=eye_tracker_raw.fft_analysis
+        )
+        
+        # Drive the LCP Steerer to deflect the light beam instantaneously
+        # Latency is near-zero (solid-state refraction change)
+        self.fine_steer_angle = probabilistic_offset * GAUSSIAN_TOLERANCE_FACTOR
+
+    def render_retinal_recomposition(self, raw_buffer):
+        """
+        Non-linear rendering based on contact lens grating coordinates
+        """
+        # Instead of rendering a flat screen, we render a pre-distorted 
+        # photonic cone aimed directly at the fovea centralis.
+        recomposed_frame = apply_aspheric_warping(
+            raw_buffer, 
+            self.fine_steer_angle, 
+            diffraction_mask_id # Mapping to the specific Child Unit grating
+        )
+        return stream_to_miniled_array(recomposed_frame)
+
+# Traditional VR Latency: Input -> Render -> Display -> Photon (20ms+)
+# Aether-Link Latency: Input -> AI Prediction -> LCP Deflection -> Retina (< 2ms)
+
+```
+
 ---
 
 ## 3. Chapter 2: Infinite Locomotion System
@@ -289,6 +372,83 @@ Project Aether-Link is an attempt to reconstruct physical reality. We do not man
 
 > **原理：光瞳匹配与无焦显示**
 > 传统 VR 是眼睛看屏幕，存在焦距冲突。本系统通过将图像转化为准直光束，经由接触镜直接投射至视网膜。由于光束极细且经过多级校准，系统具备**近乎无限的景深**，彻底消除眩晕感，同时因光路压缩，可实现 60-120 PPD 的极限清晰度。
+
+### 📝 Project Aether-Link 视觉补遗：[动态随机相位与双级耦合校准]
+
+**1. 物理层：母体（Mother Unit）的双级光路分工**
+我们彻底摒弃高精度单级追踪，转而采用**“粗-精”解耦架构**：
+
+**一级：宏观低频伺服（Mechanical/MEMS Coarse Adjustment）**
+* **职责：** 追踪眼球的大幅度旋转（Saccades）。
+* **成本控制：** 使用手机镜头同级别的 OIS 悬浮马达，精度只需达到  级别。
+
+**二级：微观高频纠偏（Solid-state Fine Adjustment）**
+* **职责：** 补偿人眼规律性震颤（Tremor）与微扫视。
+* **技术路径：** 采用 **LCP（液晶聚合物）偏转片**。通过毫秒级的电压控制，实现光束在微小角度内的瞬时偏转。**没有机械惯性，只有电场速度。**
+
+**2. 算法层：基于“统计学规律”的 feed-forward 预判**
+* **微动规律建模：** 人眼的微震颤并非随机布朗运动，而是具有特定的频谱特征（通常在 30-80Hz）。
+* **AI 介入：** 我们不需要实时“捕捉”微动，AI 只需通过上一帧的矢量方向，在**马尔可夫链模型**下预判下一帧的概率位置。
+* **容错机制（The Blur-Buffer）：** * 在隐形眼镜（Child Unit）的衍射光栅边缘引入**高斯分布权重**。
+* 当光束发生极其微小的偏移时，由于光栅的“容错冗余”和 AI 实时合成的“边缘羽化”，人脑视觉皮层会通过**自动增益控制（AGC）**忽略物理偏差，合成出完美的稳态图像。
+
+**3. 成本杀手：Mini-LED 的“非标”应用**
+* **逻辑：** 既然光路是定向射入，我们不需要 Mini-LED 维持矩形排布。
+* **改装方案：** 采用**环形/异构排列**的 Mini-LED 阵列作为点光源。利用多重全反射波导（TIR），将光效利用率从传统 VR 的 15% 提升至 **85% 以上**。
+* **结论：** 我们可以用现有的 $30 级别的背光模组，跑出 $3000 级别设备无法企及的峰值亮度与对比度。
+
+### 💻 Aether-Link 视觉系统：核心控制逻辑补完 (Pseudo-Code)
+
+```python
+"""
+# 基于马尔可夫链的眼球微颤预测与双级光路纠偏算法
+"""
+
+class AetherVisualController:
+    def __init__(self):
+        # 预加载人眼微震颤 (Tremor) 的统计学频谱特征 (30Hz-80Hz)
+        self.tremor_model = load_microsaccade_probability_model()
+        self.mother_unit_pos = (0, 0) # 侧投母机机械姿态（粗调）
+        self.lcp_steer_angle = (0, 0) # 液晶偏转片角度（精调）
+
+    def update_optical_relay(self, eye_tracker_data):
+        """
+        每秒执行 2000 次 (0.5ms 采样率)
+        """
+        # 1. 粗调预判：针对大幅度旋转 (Saccade)
+        # 利用前馈控制预判肌肉电信号趋势，而非滞后于视觉位移
+        if eye_tracker_data.velocity > SACCADE_THRESHOLD:
+            target_pos = predict_saccade_end_point(eye_tracker_data)
+            self.servo_move_to(target_pos) # 手机级OIS马达启动，精度允许误差
+
+        # 2. 精调补偿：针对规律性微动 (Tremor)
+        # 核心：不需要实时捕捉，只需根据上一帧状态在概率云中“押宝”
+        prob_offset = self.tremor_model.predict_next_offset(
+            current_v=eye_tracker_data.micro_v,
+            frequency_domain=eye_tracker_data.fft_spectrum
+        )
+        
+        # 驱动 LCP (液晶聚合物) 瞬时改变折射率，偏转光束
+        # 这里延迟几乎为零，直接物理抵消微位移
+        self.lcp_steer_angle = prob_offset * GAUSSIAN_BLUR_FACTOR 
+
+    def render_pre_distortion(self, frame_buffer):
+        """
+        基于隐形眼镜光栅位置的非线性渲染
+        """
+        # 我们不渲染整个世界，只渲染射入瞳孔的那一束“锥形光”
+        # 利用高斯模糊缓冲区 (Blur-Buffer) 覆盖光栅容错区
+        warped_frame = apply_aspheric_recomposition(
+            frame_buffer, 
+            self.lcp_steer_angle, 
+            diffraction_grating_mask # 隐形眼镜上的物理标识位
+        )
+        return emit_to_mini_led_array(warped_frame)
+
+# 传统厂家的渲染延迟：Input -> CPU -> GPU -> Display -> Photon (20ms+)
+# Aether-Link 的延迟：Input -> AI Predict -> LCP Steer -> Retina ( < 2ms )
+
+```
 
 ---
 
