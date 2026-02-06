@@ -85,7 +85,7 @@ To eliminate the massive bulk of traditional optics, we decouple the optical pat
 We abandon "Reactive Tracking" in favor of **"Predictive Occupancy"**:
 
 * **The Saccade Model:** Human eye movement is not random; it follows predictable acceleration/deceleration profiles. Our AI predicts the "Arrival Vector" of the pupil.
-* **The Blur-Buffer (Gaussian Tolerance):** By introducing a Gaussian-weighted diffraction gradient on the contact lens (Child Unit), we create an **optical redundancy zone**. This allows the visual cortex to fuse the image seamlessly even if the physical alignment has a  micro-offset.
+* **The Blur-Buffer (Gaussian Tolerance):** By introducing a Gaussian-weighted diffraction gradient on the contact lens (Child Unit), we create an **optical redundancy zone**. This allows the visual cortex to fuse the image seamlessly even if the physical alignment has a $\pm 0.01\%$ micro-offset.
 
 **III. Materiality: The "Asymmetric Refit" of Mini-LED Arrays**
 * **Asymmetric Logic:** Utilizing high-density Mini-LEDs as **Point-Light Sources** rather than traditional displays.
@@ -380,7 +380,7 @@ Project Aether-Link is an attempt to reconstruct physical reality. We do not man
 
 **一级：宏观低频伺服（Mechanical/MEMS Coarse Adjustment）**
 * **职责：** 追踪眼球的大幅度旋转（Saccades）。
-* **成本控制：** 使用手机镜头同级别的 OIS 悬浮马达，精度只需达到  级别。
+* **成本控制：** 使用手机镜头同级别的 OIS 悬浮马达，精度只需达到 $\pm 0.5^\circ$ 级别。
 
 **二级：微观高频纠偏（Solid-state Fine Adjustment）**
 * **职责：** 补偿人眼规律性震颤（Tremor）与微扫视。
