@@ -157,7 +157,8 @@ class AetherVisualController:
 > 
 > $$Total\_Cost = \sum (Semantic\_Inference) \rightarrow PALP(Physical\_Filtering) + \epsilon(Semantic\_Verification)$$
 > 
-> *(Note: Where  represents the ultra-low frequency overhead of semantic verification)*
+> *(Note: Where $\epsilon$ represents the ultra-low frequency overhead of semantic verification)*
+> 
 > **Conclusion:** Subtraction at the physical layer, multiplication at the logical layer. Building an ultimate computational framework with high real-time performance, high determinism, and ultra-high redundancy.
 
 Typical Example: Visual Application
@@ -529,7 +530,7 @@ class AetherVisualController:
 > **方法论：物理抽象化逻辑本能范式 (PALP)**
 > **核心定义：** 本方法论旨在建立一种底层的计算本能，通过将客观物理规律（位移、动量、通量等）抽象化为系统的**逻辑本能算子**。其本质是利用物理世界的确定性，从根源上消除算法层的冗余负荷，实现复杂算法的结构重组。
 > * **物理拦截：** 利用**物理差分逻辑**在感知源头执行生存权重过滤，拦截 95% 以上的无效背景噪声。在环境静默期，能效消耗趋近于物理极限（Zero-Power Standby）。
-> * **真值替代：** 将极耗算力的“概率猜想”替换为由物理定律背书的**确定性直值**（如基于  扩张率推导的绝对深度）。计算量由高维特征拟合塌陷为线性代数映射。
+> * **真值替代：** 将极耗算力的“概率猜想”替换为由物理定律背书的**确定性直值**（如基于 $TTC$ 扩张率推导的绝对深度）。计算量由高维特征拟合塌陷为线性代数映射。
 > 
 > $$Total\_Cost = \sum (Semantic\_Inference) \rightarrow PALP(Physical\_Filtering) + \epsilon(Semantic\_Verification)$$
 > (注：其中 $\epsilon$ 代表极低频的语义校验开销)
