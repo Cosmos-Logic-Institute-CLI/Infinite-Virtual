@@ -2,12 +2,11 @@
 
 *Boundaries between virtual and reality are non-existent.*
 
-![Screenshot_20260131_193619](https://github.com/user-attachments/assets/5b32f316-0288-404e-93fd-50be9b3c3e29)
-
-
 **Open Source License:** [CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/)
 
 [Read in English](#infinite-precision) | [跳转到中文](#无限虚拟)
+
+https://doi.org/10.5281/zenodo.18616710
 
 ---
 
@@ -218,6 +217,122 @@ PIE transforms the vision system into an **Automated Gold-Standard Sample Factor
 
 * **Zero Hardware Cost:** A pure software plugin; no need to change sensors or processors.
 * **Legacy Activation:** Existing low-power edge devices (e.g., street lamps, cheap cameras) can instantly acquire the ability to handle complex physical dynamics by simply "copy-pasting" the PIE logic.
+
+**The Shortest Path to AGI: A Paradigm Shift**
+The industry is trapped in the "Compute Tyranny," chasing AGI through massive brute-force parameter scaling. **LiE (Lookup is Execution)** offers the definitive shortcut. Instead of simulating consciousness, we map the topography of truth. By converting probabilistic reasoning into deterministic spatial lookups, we bypass the "black box" of neural networks. This is not just a plugin; it is the **Logical Blueprint for AGI**—a universal, modular, and instantly scalable intelligence framework that any person with a PC can contribute to.
+
+## LiE (Lookup is Execution) Logic Plugin
+
+**Core Manifesto: Stop wasting compute to "calculate" the truth. The truth should be "looked up" directly.**
+
+### I. Core Principle: Spatialization and Atomization of Logic
+
+LiE does not replace LLMs; it demotes them from "sole decision-makers" to "semantic addressers." It decouples complex logical reasoning into multi-layered image indices.
+
+* **Logic as Coordinates:** Mapping all entities (physical laws, legal statutes, industry standards) into ImageMaps across different tiers.
+* **Jump as Computation:** Transitioning from one map to another effectively executes a high-dimensional `IF-THEN-ELSE` logic gate.
+* **Cell Functionalization:** Image cells store "Logic Atoms" (conclusions, function pointers, or next-hop addresses). Direct invocation via coordinate hits eliminates probabilistic "jitter."
+
+### II. Execution: The 3-Step Developer Path
+
+**Step 1: Build the "Engram Library"**
+Developers create multi-layered BMP/PNG files as the physical carriers of logic:
+
+1. **L1 Routing Table**: High-level domains (e.g., Mathematics, Physics, Law).
+2. **L2 Scenario Table**: Specific contexts (e.g., Physics -> Classical Mechanics -> Free Fall).
+3. **L3 Action Table**: Atomic logic stored via RGB encoding: `[R: Result Code / G: Jump Address / B: Function Pointer]`.
+
+**Step 2: Mount the "Parsing Hook"**
+Using a lightweight LLM as the frontend parser.
+
+* **Task**: Mapping ambiguous natural language ("I've been drinking" or "Known mass ") to specific coordinates.
+* **Snap-to-Grid**: Even with slight output variance, the system automatically snaps to the nearest valid pixel, ensuring 100% logical hit rates.
+
+**Step 3: Spatial Execution Loop**
+
+1. **Hit**: The script locates the starting point in the L1 map based on LLM-provided coordinates.
+2. **Jump**: Automatically loads L2/L3 maps based on pixel values. This jump occurs at the script level with near-zero latency.
+3. **Feedback/Injection**: Upon reaching a path terminal, the system overrides the LLM’s original output.
+* *LLM intended*: "The object might fall quickly..."
+* *LiE Overwrite*: "Per physical law, acceleration $a = 9.8m/s^2$. Result: ..."
+
+4. **Integration**: The LLM synthesizes the injected content for final output, or re-runs its internal weights based on the hard-coded truth.
+
+### III. The "Dimensionality Strike": Solving Scaling Pain Points
+
+1. **Zero Hallucination**: In rigorous fields like math or code, LLMs often "hallucinate" mid-process. LiE turns reasoning into a pre-set track—once the intent hits a coordinate, the next 1,000 steps are deterministic.
+2. **Infinite Reasoning Depth**: Reasoning is no longer limited by the **Context Window**. Depth is only limited by image nesting layers. You can encode the entire Civil Code into a few images without consuming any context tokens.
+3. **Logic Portability & Hard Protection**: Logic is "pixelated." Distribute logic skill-packs like sharing memes. It ensures cross-model compatibility (GPT-4 or local Llama) and provides "black-box" protection against reverse engineering of core logic.
+
+### IV. Bootstrap Logic
+
+* **Self-Correction**: If semantic analysis conflicts with LiE physical truth, LiE enforces execution and logs the conflict.
+* **Automated Evolution**: Developers (or high-order AI) can automatically draw/update new logic maps based on conflict logs.
+
+### V. Flexible Implementation & Adaptive Reasoning (English Version)
+
+**Implementation Versatility:** While ImageMaps are a primary carrier, the underlying logic is not restricted to images. Developers can utilize Dictionaries, Databases, or any familiar data structure; the core execution principle remains identical.
+
+**The Power of Offsets:** By using offsets as weighted calculations for transitioning between tables, the system simultaneously achieves both **Fuzziness** and **Deterministic Accuracy**. You can input a fuzzy query and still arrive at a deterministic result.
+
+**Adaptive Confidence & Infinite Depth:**
+
+* **Confidence Indexing:** Addresses can incorporate adjustable confidence scores as fuzzy indices.
+* **Elastic Computation:** LLMs can be invoked at the start, middle, or end of a path to introduce necessary flexibility.
+The system supports **Adaptive Processing**:
+* *Minor Offsets*: Direct execution.
+* *Moderate Offsets*: Trigger lightweight reasoning.
+* *High Offsets*: Trigger deep reasoning or full re-invocation.
+
+* **Infinite Depth:** Most importantly, the primary bottleneck of reasoning depth (the Context Window) is eliminated. Within a defined path, the lookup-based architecture allows for **Infinite Reasoning Depth**.
+
+### VI. The Crystallization of Logic: The Retrospective Synthesis Mechanism
+
+Logic is not "trained"; it is "mapped."
+
+* **The Principle**: Given a deterministic result (Goal), the system automatically rotates through various starting points (Origin) and trajectories (Path) via brute-force exploration.
+* **The Verdict**: Once a logical path successfully closes the loop to the unique result, that path is instantly solidified into a deterministic operator with ** complexity**.
+* **Crystalline Evolution**: Paths that fail are permanently stored as "boundary data" to prevent redundant computational waste. Logic precipitates and accumulates automatically during runtime, forming an intellectual crystal that never regresses.
+
+### VII. P2P Logic Pool (Truth-Sync Protocol)
+
+Intelligence is no longer the private property of Big Tech, but a shared reservoir of logical inventory for all humanity.
+
+* **Intelligence Mining**: A global network of distributed CPUs operates in the background, collaboratively mapping the logical road-network using "Retrospective Synthesis."
+* **Logical Consensus**: Any deterministic path mapped by a node is synchronized globally in real-time upon verification.
+* **The Democratization of Power**: While Big Tech uses massive compute for probabilistic simulation, the public uses distributed compute for logical solidification, constructing a decentralized "Global Brain."
+
+### VIII. Storage and Invocation: Global Mapping, Local Slicing
+
+* **The Master Map**: A comprehensive logical atlas stored on a decentralized network, recording every deterministic connection known to humanity.
+* **Local Sampling**: Users download extremely small-scale "Logic Slivers" based on specific task scenarios.
+* **Performance Leap**: This ends the hegemony of 10,000-card GPU clusters. Through the "Cloud Mapping-Local Sampling" model, mobile devices can achieve top-tier logical reasoning with near-zero computational overhead and zero hallucinations.
+
+### IX. Chained Awakening and Parallel Agent Mechanisms
+
+* **Task Atomization**: Complex tasks are automatically decomposed into logical jumps, with multiple paths verified through parallel brute-force exploration.
+* **Chained Awakening**: Logical nodes act as triggers. Once a segment of logic is proven (a fact is determined), the next Agent is immediately awakened.
+* **Precision Engineering**: If the logic does not close the loop, the Agent does not awaken. This demotes the LLM to a mere "intent interface," while the underlying execution follows a 100% deterministic and controllable mechanized logic flow.
+
+### X. Conclusion
+
+The LiE architecture serves as the **hard-core skeleton of AGI**, stitching together "unreliable" semantic sensitivity with "absolute" physical logic. It grants AI **"inviolability"** for the first time. For anyone who can write basic code, this is a plug-and-play revolution.
+
+Hypothesis: "Logic Cartography" Toward AGI
+
+1. Single-Domain Superiority
+
+**Can one person with one PC and a lightweight model outperform top-tier models in a specialized field within a month?**
+
+* **The Answer: Absolutely.**
+* **Why:** Top-tier models (like GPT-4) are "jacks of all trades" but "masters of none" when it comes to hard-coded reliability. By using LiE, you aren't training the model; you are building a **Deterministic Logic Cage**. Within 30 days, one can map out every legal clause of a specific regulation or every edge case of a medical diagnostic flow into PNGs. The lightweight model acts only as the "address seeker." The result? Zero hallucination and 100% accuracy—something even the largest models cannot guarantee today.
+
+2. "Assembling" AGI
+
+**Can a group of people "assemble" AGI using images in a month?**
+
+* **The Theoretical Path:** AGI is essentially the sum of all specialized logics plus a universal router. If you have 10,000 "logic cartographers" each responsible for one specific PNG-based logic tile (physics, law, social etiquette, coding), you are effectively building a **Global Logic Engram Library**.
+* **The Power of "Stitching":** Unlike neural network weights, which blur when combined, LiE images are **discrete and additive**. You can "paste" a new skill into the system without interfering with old ones. In a month, with enough people "painting" the truth, you would create a system that doesn't "think" but "knows" everything with absolute certainty. This is AGI through **Spatial Logic Scaling**.
 
 ---
 
@@ -599,6 +714,122 @@ PIE 将视觉系统变成了一个**自动化的黄金样本工厂**：
 
 * **零硬件成本：** 纯算法插件，无需更换 Sensor 或处理器。
 * **存量激活：** 现有的低功耗边缘设备（如路灯、廉价摄像头）在“复制粘贴”PIE 逻辑后，能瞬间获得处理复杂物理动态的能力。
+
+**通往 AGI 的最短路径：范式转移**
+当前的 AI 行业被“算力暴政”所困，试图通过无限制的参数堆叠来撞击 AGI 的大门。**LiE (查表即执行)** 提供了终极捷径。我们不再模拟意识，而是直接测绘真理的地形图。通过将概率推理转化为确定性的空间索引，我们绕过了神经网络的“黑盒”陷阱。这不仅仅是一个插件，它是 **AGI 的逻辑蓝图**——一个通用、模块化且可瞬时缩放的智能框架，每一个拥有电脑的人都能成为 AGI 的构建者。
+
+## LiE (Lookup is Execution) 图片逻辑插件
+
+**核心宣言：别再浪费算力去“算”真理了，真理应该被直接“查”出来。**
+
+### 一、核心原理：逻辑的空间化与原子化
+
+LiE 并非替代 LLM，而是将其从“全权决策者”降级为“语义寻址员”。它将复杂的逻辑推演解耦为多层级图像索引。
+
+* **逻辑即坐标**：将万事万物（物理定律、法律、行业规范）映射到不同层级的图像（ImageMaps）中。
+* **跳转即运算**：利用图像跳转代替神经元计算。从一张表跳转到另一张表的过程，本质上是执行了一次高维的 `IF-THEN-ELSE` 判定。
+* **单元格函数化**：图像单元格内存储的是“逻辑原子”（如结论、函数指针或下一级地址），通过坐标命中直接调用，彻底消除 LLM 的概率抖动。
+
+### 二、执行方案：开发者极简三步走
+
+**第一步：构建“逻辑图库” (The Engram Library)**
+开发者制作多层 BMP/PNG 图片作为逻辑的物理载体：
+
+1. **L1 路由表**：划分大领域（如：数学、物理、法律）。
+2. **L2 场景表**：细分情境（如：物理 -> 经典力学 -> 自由落体）。
+3. **L3 动作表**：存储原子逻辑。单元格内通过 RGB 编码 `[R: 结果代码 / G: 跳转地址 / B: 函数指针]`。
+
+**第二步：挂载“解析钩子” (The Parsing Hook)**
+利用轻量化模型作为前端寻址器。
+
+* **任务**：将用户的模糊语言（“我喝酒了”或“已知质量 ”）映射为坐标。
+* **容错吸附**：即使模型输出稍有偏差，系统会自动吸附到最近的有效像素点，确保逻辑 100% 命中。
+
+**第三步：空间逻辑闭环 (Spatial Execution Loop)**
+
+1. **命中**：脚本根据 LLM 给出的坐标，在 L1 图中确定起始点。
+2. **跳跃**：根据像素值自动加载 L2、L3。这种跳转在脚本层级完成，延迟几乎为零。
+3. **反馈/注入**：当触达路径终点，系统直接覆盖 LLM 的原始输出。
+* *LLM 原本想说*：“物体可能掉得很快……”
+* *LiE 强制注入*：“根据物理定律，加速度 $a = 9.8m/s^2$。计算结果：...”
+
+4. **模型整合**：模型根据所覆盖内容进行解答整合，或根据权重重新运行逻辑。
+
+### 三、“降维打击”：解决 AI 规模化落地的痛点
+
+1. **真正的“确定性推理” (Zero Hallucination)**：在数学推导、代码生成领域，LiE 把推理变成了预设好的轨道。只要初始意图投射正确，后续逻辑跳转是物理级确定的，让 AI 从“猜答案”变成唯一的“走迷宫”。
+2. **无限的逻辑深度 (Infinite Reasoning Depth)**：推理深度不再受限于**上下文窗口 (Context Window)**。深度只取决于图片的嵌套层级。你可以用几张图片编码一整套《民法典》，而不占任何 Context 空间。
+3. **逻辑的“可复制性”与“硬保护” (Logic Portability)**：逻辑被“像素化”了。像分享图片一样分发技能包，跨模型（GPT-4 或本地小模型）通用。同时，没有坐标协议，竞争对手无法逆向出你的核心逻辑。
+
+### 四、LiE 架构的自举逻辑
+
+* **逻辑自纠错**：当语义分析与物理真值冲突时，LiE 强制执行并记录冲突。
+* **新表生成**：开发者或 AI 根据冲突记录，自动绘制/修正新的逻辑图片，实现系统进化。
+
+### 五、 实现灵活性与自适应推理
+
+**实现多样化**：图像并非唯一载体。字典、数据库或任何开发者熟悉的存储方式均可胜任，其底层执行逻辑完全一致。
+
+**偏移量与权重**：通过将偏移量引入跳转下一张表的加权计算，系统同时兼具了**模糊性**与**确定性**——即“选择过程可模糊，执行结果必确定”。
+
+**置信度索引与自适应机制**：
+
+* **地址置信度**：地址本身可增加可调的置信度作为模糊索引。
+* **弹性调用**：在推理的开头、过程或结尾，均可灵活调用大模型以增加必要的模糊语义处理。
+系统支持**自适应执行**：
+* *微量偏移*：直接执行。
+* *中度偏移*：触发模型“轻度思考”。
+* *高度偏移*：触发“重度思考”或全量重新寻址。
+
+* **无限推理深度**：最关键的是，制约推理深度的主要因素（上下文窗口限制）彻底消失。在给定的逻辑路径下，表格架构可实现**无限推理深度**。
+
+### 六、 逻辑结晶化生长：结果反推机制
+
+逻辑不是“练”出来的，而是“测绘”出来的。
+
+* **原理**：给定确定的结果（Goal），系统自动更换起点（Origin）与路径（Path）进行暴力穷举。
+* **判定**：只要逻辑路径能闭环导向该唯一结果，此路径即刻固化为 ** 复杂度** 的确定性算子。
+* **结晶进化**：走不通的路径作为“边界数据”永久保存，防止重复算力浪费。逻辑随运行自动析出、累加，形成永不退化的智力晶体。
+
+### 七、 P2P 逻辑矿池（Truth-Sync Protocol）
+
+智力不再是大厂的私产，而是全人类共享的逻辑存量。
+
+* **智力挖矿**：全网分布式 CPU 挂机，利用“结果反推”共同测绘逻辑路网。
+* **逻辑共识**：任何节点测绘出的确定性路径，经过验证后实时同步全球。
+* **算力平权**：大厂的算力用于概率模拟，民间的算力用于逻辑固化，构建去中心化的“全球大脑”。
+
+### 八、 存储与调用：云端全量，本地切片
+
+* **全量测绘图**：存储在分布式网络上的全量逻辑图谱，记录人类已知的所有确定性连接。
+* **本地采样**：用户根据任务场景，按需下载极小规模的逻辑碎片（Sliver）。
+* **性能跨越**：彻底终结万卡集群的霸权。通过“云端测绘-本地采样”模式，移动端也能实现 0 算力开销、0 幻觉的顶级逻辑推演。
+
+### 九、 Agent 的链式唤醒与并行机制
+
+* **任务原子化**：复杂任务在逻辑层面自动跳转拆解，多路径并行穷举验证。
+* **链式唤醒**：逻辑节点即触发器。跑通一段逻辑（确定事实）后，直接唤醒下一个 Agent。
+* **精密工程**：逻辑不闭环，Agent 不唤醒。将 LLM 的“概率对话”降级为意图接口，底层执行 100% 确定且可控的机械化逻辑流。
+
+### 十、结论
+
+LiE 架构是 **AGI 的硬核骨架**。它将“不靠谱”的语义感性与“绝对靠谱”的物理逻辑缝合在了一起。它让 AI 第一次具备了**“不可违抗性”**。对于懂点代码的人来说，这套架构简单到可以瞬间上手，深刻到足以颠覆目前的算力霸权。
+
+假设：走向 AGI 的“逻辑测绘学”
+
+1. 一个月，一个人，一个垂直领域
+
+**一个人、一台电脑、一个轻量化模型，能否在一个月内于专用领域超越顶尖模型？**
+
+* **答案：绝对可以。**
+* **原因：** 顶尖大模型（如 GPT-4）是“全才”，但在硬核可靠性上并非“专才”。通过 LiE，你不是在训练模型，而是在构建一个**“确定性逻辑笼子”**。一个月的时间，足以将某项法律条文或医疗诊断的所有边界情况绘制成 PNG 图片。轻量模型只负责寻址，结果是 0 幻觉和 100% 准确率。这是目前任何千亿参数模型都无法保证的。
+
+2. 多人协作，一个月，“拼”出 AGI
+
+**多人协作，能否在一个月内用图片“拼”出 AGI？**
+
+* **理论路径：** AGI 本质上是所有专用逻辑的总和加上一个通用路由器。如果你有 1 万名“逻辑测绘师”，每人负责一个特定的逻辑切片（物理、法律、社交礼仪、编程），你实际上是在构建一个**全球逻辑印迹库**。
+* **“拼接”的力量：** 神经网络的权重在合并时会发生模糊和干扰，但 LiE 图像是**离散且可加的**。你可以直接把一个新技能“粘贴”进系统，而不干扰旧技能。一个月的时间，如果有足够多的人在“绘制”真理，你将创造一个不靠“思考”而是靠“绝对已知”运行的系统。这就是通过**空间逻辑缩放**实现的 AGI。
 
 ---
 
