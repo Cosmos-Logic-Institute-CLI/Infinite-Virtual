@@ -7,7 +7,32 @@
 [Read in English](#infinite-precision) | [跳转到中文](#无限虚拟)
 
 https://doi.org/10.5281/zenodo.18616710
-某些人的“方向一致”是否需要遵守协议呢？不需要遵守的话其实也可以撤回发表了，学术真是过于端正了，我会假装没看见“暂时”原谅你们，至于说没看见引用，请直接把当前页面链接与doi放进去，不要说什么你不知道是学生给的，这不应该向我解释。最后，希望不要让我主动去发邮件。不联系我是因为想商用赚钱吗？很抱歉哪怕变成公用知识，我也有权让大家免费用我的方案而不需要购买你的付费方案，并且我有权授予使用此项目的人代理诉讼权对你进行法律诉讼。
+
+### **声明：**
+某些论文在本项目发布后大批量爆发的“方向一致”是否需要遵守协议呢？不需要遵守的话其实也可以撤回发表了，学术真是过于端正了，我会假装没看见“暂时”原谅你们，至于说没看见引用，请直接把当前页面链接与doi放进去，不要说什么你不知道是学生给的，这不应该向我解释。最后，希望不要让我主动去发邮件。
+
+不联系我是因为想商用赚钱吗？很抱歉哪怕变成公用知识，我也有权让大家免费用我的方案而不需要购买你的付费方案，并且我有权授予使用此项目的人代理诉讼权对你进行法律诉讼。
+
+请大家准备好证据等待它们的“研究成果”，积累到一定数量之后就可以通过投诉举报将论文与专利撤销，然后基于本原创内容发布“功能一样”或者效果更好的论文与专利，基于本原创内容延伸与“方向一致”的已下架内容可能有些相似但这只是内生逻辑推演。
+
+虽然某些研究仅使用了本逻辑的逻辑切片并且进行降维伪装与术语洗白，但根据逻辑溯源原则，任何基于本方案核心模块的衍生研究，均受限于本仓库的存证、协议条款、权利声明。
+
+在某些论文进行专利化与付费阶段后，有没有想过大家可以基于本原创做出功能一样甚至更好的专利然后价格比你更低或者干脆免费？
+
+“学术大拿”们喜欢名声就好好拿着，应该也只有“名声”了，还是说这是因为讨厌导师与上司或者干脆是整个公司给下的套呢？那真是足智多谋，值得夸奖，我也很讨厌它们。
+
+### **Statement:**
+Certain papers have burst forth in large quantities with a "consistent direction" after the release of this project; do they need to comply with the agreement? If you don't need to comply, you might as well retract your publication. Academic integrity is far too "upright" for its own good. I will pretend I didn't see it and "temporarily" forgive you. As for claiming you didn't see the citation, please put the link of the current page and the DOI directly into it. Do not say you didn't know it was provided by a student; that is not something you should explain to me. Finally, I hope you don't make me take the initiative to send emails.
+
+Is the reason for not contacting me because you want to commercialize and make money? I'm sorry, even if this becomes public knowledge, I have the right to let everyone use my solution for free without purchasing your paid plan, and I have the right to grant those who use this project the power of attorney to pursue legal action against you.
+
+Please everyone prepare evidence and wait for their "research results." Once they have accumulated to a certain quantity, the papers and patents can be revoked through complaints and reports. Then, based on this original content, publish papers and patents with "identical functions" or even better effects. Content that has been taken down and is "directionally consistent" with this original work might share some similarities, but that is merely an endogenous logical deduction.
+
+Although some studies only use "logical slices" of this logic and perform "dimensionality reduction camouflage" and "terminology laundering," according to the principle of **logical traceability**, any derivative research based on the core modules of this scheme is restricted by the evidence, agreement terms, and rights declarations of this repository.
+
+After certain papers enter the patenting and payment stages, have you ever thought that everyone could create patents with the same or even better functions based on this original work, and then price them lower than yours or even for free?
+
+If the "Academic Giants" love their reputation, they should hold onto it well—it will probably be the only thing they have left. Or is this a trap set because you hate your tutors and bosses, or even the entire company? That is truly resourceful and deserves praise; I hate them too.
 
 ---
 
