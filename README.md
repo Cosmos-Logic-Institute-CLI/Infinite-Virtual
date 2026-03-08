@@ -8,7 +8,21 @@
 
 https://doi.org/10.5281/zenodo.18616710
 
-### **声明：**
+<details>
+  <summary>Statement/声明</summary>
+
+  Certain papers have burst forth in large quantities with a "consistent direction" after the release of this project; do they need to comply with the agreement? If you don't need to comply, you might as well retract your publication. Academic integrity is far too "upright" for its own good. I will pretend I didn't see it and "temporarily" forgive you. As for claiming you didn't see the citation, please put the link of the current page and the DOI directly into it. Do not say you didn't know it was provided by a student; that is not something you should explain to me. Finally, I hope you don't make me take the initiative to send emails.
+
+Is the reason for not contacting me because you want to commercialize and make money? I'm sorry, even if this becomes public knowledge, I have the right to let everyone use my solution for free without purchasing your paid plan, and I have the right to grant those who use this project the power of attorney to pursue legal action against you.
+
+Please everyone prepare evidence and wait for their "research results." Once they have accumulated to a certain quantity, the papers and patents can be revoked through complaints and reports. Then, based on this original content, publish papers and patents with "identical functions" or even better effects. Content that has been taken down and is "directionally consistent" with this original work might share some similarities, but that is merely an endogenous logical deduction.
+
+Although some studies only use "logical slices" of this logic and perform "dimensionality reduction camouflage" and "terminology laundering," according to the principle of **logical traceability**, any derivative research based on the core modules of this scheme is restricted by the evidence, agreement terms, and rights declarations of this repository.
+
+After certain papers enter the patenting and payment stages, have you ever thought that everyone could create patents with the same or even better functions based on this original work, and then price them lower than yours or even for free?
+
+If the "Academic Giants" love their reputation, they should hold onto it well—it will probably be the only thing they have left. Or is this a trap set because you hate your tutors and bosses, or even the entire company? That is truly resourceful and deserves praise; I hate them too.
+
 某些论文在本项目发布后大批量爆发的“方向一致”是否需要遵守协议呢？不需要遵守的话其实也可以撤回发表了，学术真是过于端正了，我会假装没看见“暂时”原谅你们，至于说没看见引用，请直接把当前页面链接与doi放进去，不要说什么你不知道是学生给的，这不应该向我解释。最后，希望不要让我主动去发邮件。
 
 不联系我是因为想商用赚钱吗？很抱歉哪怕变成公用知识，我也有权让大家免费用我的方案而不需要购买你的付费方案，并且我有权授予使用此项目的人代理诉讼权对你进行法律诉讼。
@@ -21,18 +35,7 @@ https://doi.org/10.5281/zenodo.18616710
 
 “学术大拿”们喜欢名声就好好拿着，应该也只有“名声”了，还是说这是因为讨厌导师与上司或者干脆是整个公司给下的套呢？那真是足智多谋，值得夸奖，我也很讨厌它们。
 
-### **Statement:**
-Certain papers have burst forth in large quantities with a "consistent direction" after the release of this project; do they need to comply with the agreement? If you don't need to comply, you might as well retract your publication. Academic integrity is far too "upright" for its own good. I will pretend I didn't see it and "temporarily" forgive you. As for claiming you didn't see the citation, please put the link of the current page and the DOI directly into it. Do not say you didn't know it was provided by a student; that is not something you should explain to me. Finally, I hope you don't make me take the initiative to send emails.
-
-Is the reason for not contacting me because you want to commercialize and make money? I'm sorry, even if this becomes public knowledge, I have the right to let everyone use my solution for free without purchasing your paid plan, and I have the right to grant those who use this project the power of attorney to pursue legal action against you.
-
-Please everyone prepare evidence and wait for their "research results." Once they have accumulated to a certain quantity, the papers and patents can be revoked through complaints and reports. Then, based on this original content, publish papers and patents with "identical functions" or even better effects. Content that has been taken down and is "directionally consistent" with this original work might share some similarities, but that is merely an endogenous logical deduction.
-
-Although some studies only use "logical slices" of this logic and perform "dimensionality reduction camouflage" and "terminology laundering," according to the principle of **logical traceability**, any derivative research based on the core modules of this scheme is restricted by the evidence, agreement terms, and rights declarations of this repository.
-
-After certain papers enter the patenting and payment stages, have you ever thought that everyone could create patents with the same or even better functions based on this original work, and then price them lower than yours or even for free?
-
-If the "Academic Giants" love their reputation, they should hold onto it well—it will probably be the only thing they have left. Or is this a trap set because you hate your tutors and bosses, or even the entire company? That is truly resourceful and deserves praise; I hate them too.
+</details>
 
 ---
 
@@ -1595,8 +1598,7 @@ PIE 将视觉系统变成了一个**自动化的黄金样本工厂**：
 * **零硬件成本：** 纯算法插件，无需更换 Sensor 或处理器。
 * **存量激活：** 现有的低功耗边缘设备（如路灯、廉价摄像头）在“复制粘贴”PIE 逻辑后，能瞬间获得处理复杂物理动态的能力。
 
-**通往 AGI 的最短路径：范式转移**
-当前的 AI 行业被“算力暴政”所困，试图通过无限制的参数堆叠来撞击 AGI 的大门。**LiE (查表即执行)** 提供了终极捷径。我们不再模拟意识，而是直接测绘真理的地形图。通过将概率推理转化为确定性的空间索引，我们绕过了神经网络的“黑盒”陷阱。这不仅仅是一个插件，它是 **AGI 的逻辑蓝图**——一个通用、模块化且可瞬时缩放的智能框架，每一个拥有电脑的人都能成为 AGI 的构建者。
+---
 
 ## LiE (Lookup is Execution) 图片逻辑插件
 
@@ -1691,25 +1693,16 @@ LiE 并非替代 LLM，而是将其从“全权决策者”降级为“语义寻
 * **链式唤醒**：逻辑节点即触发器。跑通一段逻辑（确定事实）后，直接唤醒下一个 Agent。
 * **精密工程**：逻辑不闭环，Agent 不唤醒。将 LLM 的“概率对话”降级为意图接口，底层执行 100% 确定且可控的机械化逻辑流。
 
-### 十、结论
+### 十. 分形拓扑约束
+由外部符号逻辑控制器与内部神经网络评估器强耦合而成，运转流程被严格限制在以下三个硬性周期内：
 
-LiE 架构是 **AGI 的硬核骨架**。它将“不靠谱”的语义感性与“绝对靠谱”的物理逻辑缝合在了一起。它让 AI 第一次具备了**“不可违抗性”**。对于懂点代码的人来说，这套架构简单到可以瞬间上手，深刻到足以颠覆目前的算力霸权。
-
-假设：走向 AGI 的“逻辑测绘学”
-
-1. 一个月，一个人，一个垂直领域
-
-**一个人、一台电脑、一个轻量化模型，能否在一个月内于专用领域超越顶尖模型？**
-
-* **答案：绝对可以。**
-* **原因：** 顶尖大模型（如 GPT-4）是“全才”，但在硬核可靠性上并非“专才”。通过 LiE，你不是在训练模型，而是在构建一个**“确定性逻辑笼子”**。一个月的时间，足以将某项法律条文或医疗诊断的所有边界情况绘制成 PNG 图片。轻量模型只负责寻址，结果是 0 幻觉和 100% 准确率。这是目前任何千亿参数模型都无法保证的。
-
-2. 多人协作，一个月，“拼”出 AGI
-
-**多人协作，能否在一个月内用图片“拼”出 AGI？**
-
-* **理论路径：** AGI 本质上是所有专用逻辑的总和加上一个通用路由器。如果你有 1 万名“逻辑测绘师”，每人负责一个特定的逻辑切片（物理、法律、社交礼仪、编程），你实际上是在构建一个**全球逻辑印迹库**。
-* **“拼接”的力量：** 神经网络的权重在合并时会发生模糊和干扰，但 LiE 图像是**离散且可加的**。你可以直接把一个新技能“粘贴”进系统，而不干扰旧技能。一个月的时间，如果有足够多的人在“绘制”真理，你将创造一个不靠“思考”而是靠“绝对已知”运行的系统。这就是通过**空间逻辑缩放**实现的 AGI。
+贝叶斯示例版：
+* **脚手架生成与节点限位：**
+外部程序在内存中实时生成一棵有向无环图（DAG）或树形结构。在任意时间步 $t$，系统强制打断 LLM 的自由输出，仅允许其基于当前状态节点 $S_t$，生成有限数量（如 $k=3$）的离散后续动作或逻辑假设作为子节点 $S_{t+1}$。
+* **贝叶斯概率打分与态势评估：**
+针对每一个生成的子节点，调用 LLM 执行前向打分。模型必须根据局部证据 $E$，输出该节点通向最终正确终端的贝叶斯后验概率 $P(S_{t+1}|E)$。这一过程将原本模糊的文本生成，强行转化为冷酷的数学寻优计算。
+* **规则主导的动态剪枝与回溯：**
+控制权无条件交还给外部控制器。若某子节点的贝叶斯概率低于设定的物理阈值（$\tau$），系统将触发“死神进程”，直接斩断该逻辑分支，并强制算力回溯至上一个安全节点。
 
 ---
 
