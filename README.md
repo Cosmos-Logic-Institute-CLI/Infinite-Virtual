@@ -10,6 +10,10 @@ https://doi.org/10.5281/zenodo.18616710
 
 https://github.com/Cosmos-Logic-Institute-CLI
 
+生态全景以及基于个人主观的生态案例推荐
+https://github.com/TIMAN-group/PlugMem
+https://github.com/GVCLab/MLLM-4D
+
 <details>
   <summary>Statement/声明</summary>
 
