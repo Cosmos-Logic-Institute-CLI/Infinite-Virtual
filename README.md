@@ -10,6 +10,8 @@ https://doi.org/10.5281/zenodo.18616710
 
 https://github.com/Cosmos-Logic-Institute-CLI
 
+Click on the README. MD above to view the full content/点击上方README.md查看完整内容
+
 <details>
   <summary>Statement/声明</summary>
 
