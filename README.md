@@ -5173,6 +5173,8 @@ All derivations and conclusions in this paper are strictly based on the three fo
 | **Axiom 2 Cascade Anchor** | The physical essence of the nonlinear convective term is the cascade transfer of kinetic energy to microscopic high-frequency modes, a fractal growth tree stretching local curvature in phase space, constrained by volume-preserving divergence-free conditions | Divergence-free nonlinear cascade operator \(\mathcal{C}(\mathbf{u}) = -\mathbb{P}\left[ (\mathbf{u} \cdot \nabla)\mathbf{u} \right]\) (\(\mathbb{P}\) denotes Leray projection operator) | Vortex stretching and splitting emit high-frequency energy to microscopic scales, attempting to form topological spikes with infinite curvature locally; conforming to Helmholtz vortex tube theorems, only transferring energy without generating or consuming total kinetic energy | \(w_C=0.9\) (Connecting Macro and Micro) | Energy cascading to microscales is constrained by macroscopic energy upper bounds and microscopic dissipation lower bounds, only completing dimensional reorganization within volume-preserving divergence-free topological manifolds |
 | **Axiom 3 Dissipation Anchor** | Topological friction principle (\(\nu>0\)): phase misalignment at minimal spatial scales and extreme curvature inevitably generate quadratic heat dissipation and irreversible entropy increase, an intrinsic rigid property of topological manifolds | Veto truncation dissipation operator \(\mathcal{V}(\mathbf{u}) = -\nu \Delta \mathbf{u}\) | The rigid bottom line of fluid topological manifolds; high-frequency curvature distortion accompanies irreversible energy loss, a direct manifestation of the second law of thermodynamics in fluid topology and the origin of the regularizing effect of viscosity | \(w_L=1.0\) (Global Supreme) | Any singularity hypothesis constructing "zero dissipation" or "finite energy sustaining infinite curvature" triggers a global veto, causing instantaneous collapse of high-frequency branch coherence |
 
+"The latent space $\mathcal{H}$ of N-FWTE is a three-dimensional compact Riemannian manifold constructed by the Sobolev space $H^s(\mathbb{T}^3)$ with $s\ge3$."
+
 ---
 
 ## II. Core Paradigm Reconstruction: Topological Isomorphic Mapping of the NS Equations via N-FWTE
@@ -12535,6 +12537,8 @@ if __name__ == "__main__":
 | **公理1 能量锚点公理** | 孤立流体系统的总动能严格有限且单调不增，构成相空间中有界且闭合的能量流形，是系统演化的全局最高权限约束 | 全局动能投影算子 $\mathcal{P}_0(\mathbf{u}) = \frac{1}{2}\int_{\mathbb{T}^3} |\mathbf{u}|^2 d\mathbf{x} \equiv E(t)$ | 任何尺度的流场演化，其动能积分必须小于等于初始总动能 $E_0$，系统无外部无限能量泵入，是热力学第一定律的拓扑化表达 | $w_E=1.0$（全局最高） | 全局动能的拓扑测度永远有限，无法突破初始能量的绝对上限，任何要求无穷能量供给的演化假设直接失效 |
 | **公理2 级联锚点公理** | 非线性对流项的物理本质，是动能向微观高频模态的级联转移，是相空间中试图拉伸局部曲率的分形生长树，全程受保体积无散约束 | 无散非线性级联算子 $\mathcal{C}(\mathbf{u}) = -\mathbb{P}\left[ (\mathbf{u} \cdot \nabla)\mathbf{u} \right]$（$\mathbb{P}$为Leray投影算子） | 涡流分裂与拉伸的过程，是向微观尺度发射高频能量波、试图在局部构建曲率无穷大的拓扑尖峰，全程符合亥姆霍兹涡管定理，仅转移能量、不产生也不消耗全局动能 | $w_C=0.9$（承上启下） | 能量向微观级联的过程，必须服从宏观能量上限与微观耗散下限的双重挤压，仅能在保体积无散的拓扑流形内完成维度重组 |
 | **公理3 耗散锚点公理** | 拓扑摩擦原理（粘性 $\nu>0$）：极小空间尺度的相位错位与极端曲率，必然产生平方级的热量耗散与不可逆熵增，是拓扑流形的内生刚性属性 | Veto截断耗散算子 $\mathcal{V}(\mathbf{u}) = -\nu \Delta \mathbf{u}$ | 流体拓扑流形的刚性底线，高频曲率畸变必然伴随不可逆的能量流失，是热力学第二定律在流体拓扑中的直接体现，也是粘性项正则化效应的根源 | $w_L=1.0$（全局最高） | 任何试图构造“零耗散”或“有限能量供养无限曲率”的奇点假设，直接触发全局否决权，对应高频分支相干性瞬间崩溃 |
+
+“N-FWTE的潜空间$\mathcal{H}$，是由索伯列夫空间$H^s(\mathbb{T}^3)$（$s\ge3$）构成的三维紧致黎曼流形”
 
 ---
 
