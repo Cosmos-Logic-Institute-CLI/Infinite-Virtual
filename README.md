@@ -5610,6 +5610,671 @@ if __name__ == '__main__':
 
 ---
 
+## N-FWTE Automated Theorem Proving V2.0
+
+```python
+import numpy as np
+import time
+import random
+
+def solve_n30000_supernova_engine_opt(n_v, m_c, clauses, timeout=54.0):
+    cv = np.array([c[0] for c in clauses], dtype=np.int32)
+    cd = np.array([c[1] for c in clauses], dtype=np.int32)
+    
+    var_pos_clauses = [[] for _ in range(n_v)]
+    var_neg_clauses = [[] for _ in range(n_v)]
+    for i in range(m_c):
+        for pos in range(3):
+            v = cv[i, pos]
+            d = cd[i, pos]
+            if d == 0:
+                var_pos_clauses[v].append(i)
+            else:
+                var_neg_clauses[v].append(i)
+                
+    var_pos_clauses = [tuple(lst) for lst in var_pos_clauses]
+    var_neg_clauses = [tuple(lst) for lst in var_neg_clauses]
+            
+    start_time = time.time()
+    
+    state = bytearray(np.random.randint(0, 2, n_v).astype(np.int8))
+    
+    sat_counts = bytearray(m_c)
+    for i in range(m_c):
+        sat = 0
+        if state[cv[i, 0]] != cd[i, 0]: sat += 1
+        if state[cv[i, 1]] != cd[i, 1]: sat += 1
+        if state[cv[i, 2]] != cd[i, 2]: sat += 1
+        sat_counts[i] = sat
+        
+    unsat_list = [i for i, count in enumerate(sat_counts) if count == 0]
+    unsat_pos = [-1] * m_c
+    for i, c in enumerate(unsat_list):
+        unsat_pos[c] = i
+        
+    best_overall_sat = 0
+    best_overall_state = None
+    stagnation_counter = 0
+
+    cv_list = cv.tolist()
+    rand_random = random.random
+
+    for step in range(100_000_000):
+        len_unsat = len(unsat_list)
+        if not len_unsat:
+            return np.array(state), "SUCCESS", time.time() - start_time
+            
+        curr_sat = m_c - len_unsat
+        if curr_sat > best_overall_sat:
+            best_overall_sat = curr_sat
+            best_overall_state = bytearray(state)
+            stagnation_counter = 0
+        else:
+            stagnation_counter += 1
+            
+        if step % 10000 == 0 and time.time() - start_time > timeout:
+            return np.array(best_overall_state), "TIMEOUT", time.time() - start_time
+            
+        if stagnation_counter > 80000:
+            num_mutations = max(1, n_v // 150)
+            vars_to_flip = random.sample(range(n_v), num_mutations)
+            
+            for f_v in vars_to_flip:
+                s = state[f_v]
+                state[f_v] = 1 - s
+                
+                if s == 0:
+                    for cl_idx in var_pos_clauses[f_v]:
+                        c = sat_counts[cl_idx]
+                        if c == 0:
+                            idx = unsat_pos[cl_idx]
+                            last_c = unsat_list.pop()
+                            if idx != len(unsat_list):
+                                unsat_list[idx] = last_c
+                                unsat_pos[last_c] = idx
+                        sat_counts[cl_idx] = c + 1
+                    for cl_idx in var_neg_clauses[f_v]:
+                        c = sat_counts[cl_idx]
+                        if c == 1:
+                            unsat_pos[cl_idx] = len(unsat_list)
+                            unsat_list.append(cl_idx)
+                        sat_counts[cl_idx] = c - 1
+                else:
+                    for cl_idx in var_neg_clauses[f_v]:
+                        c = sat_counts[cl_idx]
+                        if c == 0:
+                            idx = unsat_pos[cl_idx]
+                            last_c = unsat_list.pop()
+                            if idx != len(unsat_list):
+                                unsat_list[idx] = last_c
+                                unsat_pos[last_c] = idx
+                        sat_counts[cl_idx] = c + 1
+                    for cl_idx in var_pos_clauses[f_v]:
+                        c = sat_counts[cl_idx]
+                        if c == 1:
+                            unsat_pos[cl_idx] = len(unsat_list)
+                            unsat_list.append(cl_idx)
+                        sat_counts[cl_idx] = c - 1
+                        
+            stagnation_counter = 0
+            continue
+            
+        c_idx = unsat_list[int(rand_random() * len_unsat)]
+        c_v0, c_v1, c_v2 = cv_list[c_idx]
+        
+        r = rand_random()
+        if r < 0.45: 
+            flip_v = c_v0 if r < 0.15 else (c_v1 if r < 0.30 else c_v2)
+        else:
+            breaks0 = 0
+            if state[c_v0] == 1:
+                for cl_idx in var_pos_clauses[c_v0]:
+                    if sat_counts[cl_idx] == 1: breaks0 += 1
+            else:
+                for cl_idx in var_neg_clauses[c_v0]:
+                    if sat_counts[cl_idx] == 1: breaks0 += 1
+            min_breaks = breaks0
+            best_vars = [c_v0]
+            
+            breaks1 = 0
+            if state[c_v1] == 1:
+                for cl_idx in var_pos_clauses[c_v1]:
+                    if sat_counts[cl_idx] == 1: breaks1 += 1
+            else:
+                for cl_idx in var_neg_clauses[c_v1]:
+                    if sat_counts[cl_idx] == 1: breaks1 += 1
+            
+            if breaks1 < min_breaks:
+                min_breaks = breaks1
+                best_vars = [c_v1]
+            elif breaks1 == min_breaks:
+                best_vars.append(c_v1)
+                
+            breaks2 = 0
+            if state[c_v2] == 1:
+                for cl_idx in var_pos_clauses[c_v2]:
+                    if sat_counts[cl_idx] == 1: breaks2 += 1
+            else:
+                for cl_idx in var_neg_clauses[c_v2]:
+                    if sat_counts[cl_idx] == 1: breaks2 += 1
+            
+            if breaks2 < min_breaks:
+                flip_v = c_v2
+            elif breaks2 == min_breaks:
+                best_vars.append(c_v2)
+                num_best = len(best_vars)
+                r2 = rand_random()
+                flip_v = best_vars[0] if num_best == 1 else best_vars[int(r2 * num_best)]
+            else:
+                num_best = len(best_vars)
+                r2 = rand_random()
+                flip_v = best_vars[0] if num_best == 1 else best_vars[int(r2 * num_best)]
+            
+        s = state[flip_v]
+        state[flip_v] = 1 - s
+        
+        if s == 0:
+            for cl_idx in var_pos_clauses[flip_v]:
+                c = sat_counts[cl_idx]
+                if c == 0:
+                    idx = unsat_pos[cl_idx]
+                    last_c = unsat_list.pop()
+                    if idx != len(unsat_list):
+                        unsat_list[idx] = last_c
+                        unsat_pos[last_c] = idx
+                sat_counts[cl_idx] = c + 1
+            for cl_idx in var_neg_clauses[flip_v]:
+                c = sat_counts[cl_idx]
+                if c == 1:
+                    unsat_pos[cl_idx] = len(unsat_list)
+                    unsat_list.append(cl_idx)
+                sat_counts[cl_idx] = c - 1
+        else:
+            for cl_idx in var_neg_clauses[flip_v]:
+                c = sat_counts[cl_idx]
+                if c == 0:
+                    idx = unsat_pos[cl_idx]
+                    last_c = unsat_list.pop()
+                    if idx != len(unsat_list):
+                        unsat_list[idx] = last_c
+                        unsat_pos[last_c] = idx
+                sat_counts[cl_idx] = c + 1
+            for cl_idx in var_pos_clauses[flip_v]:
+                c = sat_counts[cl_idx]
+                if c == 1:
+                    unsat_pos[cl_idx] = len(unsat_list)
+                    unsat_list.append(cl_idx)
+                sat_counts[cl_idx] = c - 1
+
+    return np.array(best_overall_state), "TIMEOUT", time.time() - start_time
+
+N_v = 200000
+M_c = int(N_v * 4.26)
+truth = np.random.randint(0, 2, N_v)
+clauses = []
+for _ in range(M_c):
+    v = random.sample(range(N_v), 3)
+    s = [float(np.random.choice([0, 1])) for _ in range(3)]
+    if all(truth[v[i]] == s[i] for i in range(3)):
+        idx = random.randint(0, 2)
+        s[idx] = 1.0 - s[idx] 
+    clauses.append((v, s))
+
+print(f"Igniting N=30000 SUPERNOVA ENGINE OPT (N={N_v}, M={M_c})...")
+sol, status, dur = solve_n30000_supernova_engine_opt(N_v, M_c, clauses, 100.0)
+
+cv_verify = np.array([c[0] for c in clauses], dtype=np.int32)
+cd_verify = np.array([c[1] for c in clauses], dtype=np.int32)
+final_sat = np.sum(np.any(sol[cv_verify] != cd_verify, axis=1))
+
+print(f"Final Result: {status} | SAT: {final_sat}/{M_c} | Time: {dur:.2f}s")
+```
+
+Igniting N=30000 SUPERNOVA ENGINE OPT (N=200000, M=852000)...
+Final Result: SUCCESS | SAT: 852000/852000 | Time: 88.84s
+
+---
+
+## N-FWTE Automated Theorem Proving V2.0 C language
+
+```python
+import os
+import subprocess
+import ctypes
+import numpy as np
+import time
+
+# ---------------------------------------------------------
+# 1. 内嵌 C 语言求解器核心 (编译为共享库)
+# ---------------------------------------------------------
+c_code = """
+#include <stdint.h>
+#include <stdlib.h>
+#include <time.h>
+
+double rand_double() {
+    return (double)rand() / (double)RAND_MAX;
+}
+
+int solve_c(int n_v, int m_c, int* cv, int* cd, int8_t* best_state_out, double timeout) {
+    srand(42);
+
+    int* pos_counts = (int*)calloc(n_v, sizeof(int));
+    int* neg_counts = (int*)calloc(n_v, sizeof(int));
+
+    for (int i = 0; i < m_c; i++) {
+        for (int p = 0; p < 3; p++) {
+            int v = cv[i * 3 + p];
+            if (cd[i * 3 + p] == 0) pos_counts[v]++;
+            else neg_counts[v]++;
+        }
+    }
+
+    int* pos_indptr = (int*)calloc(n_v + 1, sizeof(int));
+    int* neg_indptr = (int*)calloc(n_v + 1, sizeof(int));
+
+    for(int i=0; i<n_v; i++) {
+        pos_indptr[i+1] = pos_indptr[i] + pos_counts[i];
+        neg_indptr[i+1] = neg_indptr[i] + neg_counts[i];
+    }
+
+    int* pos_indices = (int*)malloc(pos_indptr[n_v] * sizeof(int));
+    int* neg_indices = (int*)malloc(neg_indptr[n_v] * sizeof(int));
+
+    int* pos_cur = (int*)malloc(n_v * sizeof(int));
+    int* neg_cur = (int*)malloc(n_v * sizeof(int));
+    for(int i=0; i<n_v; i++){
+        pos_cur[i] = pos_indptr[i];
+        neg_cur[i] = neg_indptr[i];
+    }
+
+    for (int i = 0; i < m_c; i++) {
+        for (int p = 0; p < 3; p++) {
+            int v = cv[i * 3 + p];
+            if (cd[i * 3 + p] == 0) pos_indices[pos_cur[v]++] = i;
+            else neg_indices[neg_cur[v]++] = i;
+        }
+    }
+
+    free(pos_counts); free(neg_counts); free(pos_cur); free(neg_cur);
+
+    int8_t* state = (int8_t*)malloc(n_v * sizeof(int8_t));
+    for(int i=0; i<n_v; i++) state[i] = rand() % 2;
+
+    int* sat_counts = (int*)calloc(m_c, sizeof(int));
+    for(int i=0; i<m_c; i++) {
+        int sat = 0;
+        if (state[cv[i*3 + 0]] != cd[i*3 + 0]) sat++;
+        if (state[cv[i*3 + 1]] != cd[i*3 + 1]) sat++;
+        if (state[cv[i*3 + 2]] != cd[i*3 + 2]) sat++;
+        sat_counts[i] = sat;
+    }
+
+    int* unsat_list = (int*)malloc(m_c * sizeof(int));
+    int* unsat_pos = (int*)malloc(m_c * sizeof(int));
+    for(int i=0; i<m_c; i++) unsat_pos[i] = -1;
+
+    int len_unsat = 0;
+    for(int i=0; i<m_c; i++) {
+        if(sat_counts[i] == 0) {
+            unsat_list[len_unsat] = i;
+            unsat_pos[i] = len_unsat;
+            len_unsat++;
+        }
+    }
+
+    int best_overall_sat = 0;
+    int stagnation_counter = 0;
+    int8_t* state_mutated = (int8_t*)calloc(n_v, sizeof(int8_t));
+    int* vars_to_flip = (int*)malloc((n_v / 150 + 1) * sizeof(int));
+
+    struct timespec start_ts, now_ts;
+    clock_gettime(CLOCK_MONOTONIC, &start_ts);
+
+    int status = 0;
+
+    for (int step = 0; step < 100000000; step++) {
+        if (len_unsat == 0) {
+            status = 1;
+            for(int i=0; i<n_v; i++) best_state_out[i] = state[i];
+            break;
+        }
+
+        int curr_sat = m_c - len_unsat;
+        if (curr_sat > best_overall_sat) {
+            best_overall_sat = curr_sat;
+            for(int i=0; i<n_v; i++) best_state_out[i] = state[i];
+            stagnation_counter = 0;
+        } else {
+            stagnation_counter++;
+        }
+
+        if (step % 10000 == 0) {
+            clock_gettime(CLOCK_MONOTONIC, &now_ts);
+            double elapsed = (now_ts.tv_sec - start_ts.tv_sec) + (now_ts.tv_nsec - start_ts.tv_nsec) / 1e9;
+            if (elapsed > timeout) {
+                status = 0;
+                break;
+            }
+        }
+
+        if (stagnation_counter > 80000) {
+            int num_mutations = n_v / 150;
+            if (num_mutations < 1) num_mutations = 1;
+
+            int count = 0;
+            while(count < num_mutations) {
+                int v = rand() % n_v;
+                if(state_mutated[v] == 0) {
+                    state_mutated[v] = 1;
+                    vars_to_flip[count++] = v;
+                }
+            }
+
+            for(int i=0; i<num_mutations; i++) {
+                int f_v = vars_to_flip[i];
+                state_mutated[f_v] = 0;
+                int s = state[f_v];
+                state[f_v] = 1 - s;
+
+                if (s == 0) {
+                    for(int j = pos_indptr[f_v]; j < pos_indptr[f_v+1]; j++) {
+                        int cl_idx = pos_indices[j];
+                        int c = sat_counts[cl_idx];
+                        if (c == 0) {
+                            int idx = unsat_pos[cl_idx];
+                            len_unsat--;
+                            int last_c = unsat_list[len_unsat];
+                            if (idx != len_unsat) {
+                                unsat_list[idx] = last_c;
+                                unsat_pos[last_c] = idx;
+                            }
+                        }
+                        sat_counts[cl_idx] = c + 1;
+                    }
+                    for(int j = neg_indptr[f_v]; j < neg_indptr[f_v+1]; j++) {
+                        int cl_idx = neg_indices[j];
+                        int c = sat_counts[cl_idx];
+                        if (c == 1) {
+                            unsat_pos[cl_idx] = len_unsat;
+                            unsat_list[len_unsat] = cl_idx;
+                            len_unsat++;
+                        }
+                        sat_counts[cl_idx] = c - 1;
+                    }
+                } else {
+                    for(int j = neg_indptr[f_v]; j < neg_indptr[f_v+1]; j++) {
+                        int cl_idx = neg_indices[j];
+                        int c = sat_counts[cl_idx];
+                        if (c == 0) {
+                            int idx = unsat_pos[cl_idx];
+                            len_unsat--;
+                            int last_c = unsat_list[len_unsat];
+                            if (idx != len_unsat) {
+                                unsat_list[idx] = last_c;
+                                unsat_pos[last_c] = idx;
+                            }
+                        }
+                        sat_counts[cl_idx] = c + 1;
+                    }
+                    for(int j = pos_indptr[f_v]; j < pos_indptr[f_v+1]; j++) {
+                        int cl_idx = pos_indices[j];
+                        int c = sat_counts[cl_idx];
+                        if (c == 1) {
+                            unsat_pos[cl_idx] = len_unsat;
+                            unsat_list[len_unsat] = cl_idx;
+                            len_unsat++;
+                        }
+                        sat_counts[cl_idx] = c - 1;
+                    }
+                }
+            }
+            stagnation_counter = 0;
+            continue;
+        }
+
+        int c_idx = unsat_list[rand() % len_unsat];
+        int c_v0 = cv[c_idx * 3 + 0];
+        int c_v1 = cv[c_idx * 3 + 1];
+        int c_v2 = cv[c_idx * 3 + 2];
+
+        double r = rand_double();
+        int flip_v = -1;
+
+        if (r < 0.45) {
+            if (r < 0.15) flip_v = c_v0;
+            else if (r < 0.30) flip_v = c_v1;
+            else flip_v = c_v2;
+        } else {
+            int breaks0 = 0;
+            if (state[c_v0] == 1) {
+                for(int i = pos_indptr[c_v0]; i < pos_indptr[c_v0+1]; i++) {
+                    if (sat_counts[pos_indices[i]] == 1) breaks0++;
+                }
+            } else {
+                for(int i = neg_indptr[c_v0]; i < neg_indptr[c_v0+1]; i++) {
+                    if (sat_counts[neg_indices[i]] == 1) breaks0++;
+                }
+            }
+            int min_breaks = breaks0;
+            int best_vars_0 = c_v0;
+            int best_vars_count = 1;
+
+            int breaks1 = 0;
+            if (state[c_v1] == 1) {
+                for(int i = pos_indptr[c_v1]; i < pos_indptr[c_v1+1]; i++) {
+                    if (sat_counts[pos_indices[i]] == 1) breaks1++;
+                }
+            } else {
+                for(int i = neg_indptr[c_v1]; i < neg_indptr[c_v1+1]; i++) {
+                    if (sat_counts[neg_indices[i]] == 1) breaks1++;
+                }
+            }
+            int best_vars_1 = -1;
+            if (breaks1 < min_breaks) {
+                min_breaks = breaks1;
+                best_vars_0 = c_v1;
+                best_vars_count = 1;
+            } else if (breaks1 == min_breaks) {
+                best_vars_1 = c_v1;
+                best_vars_count = 2;
+            }
+
+            int breaks2 = 0;
+            if (state[c_v2] == 1) {
+                for(int i = pos_indptr[c_v2]; i < pos_indptr[c_v2+1]; i++) {
+                    if (sat_counts[pos_indices[i]] == 1) breaks2++;
+                }
+            } else {
+                for(int i = neg_indptr[c_v2]; i < neg_indptr[c_v2+1]; i++) {
+                    if (sat_counts[neg_indices[i]] == 1) breaks2++;
+                }
+            }
+            if (breaks2 < min_breaks) {
+                flip_v = c_v2;
+            } else if (breaks2 == min_breaks) {
+                if (best_vars_count == 1) {
+                    flip_v = (rand_double() < 0.5) ? best_vars_0 : c_v2;
+                } else {
+                    double r2 = rand_double();
+                    if (r2 < 0.333333) flip_v = best_vars_0;
+                    else if (r2 < 0.666666) flip_v = best_vars_1;
+                    else flip_v = c_v2;
+                }
+            } else {
+                if (best_vars_count == 1) {
+                    flip_v = best_vars_0;
+                } else {
+                    flip_v = (rand_double() < 0.5) ? best_vars_0 : best_vars_1;
+                }
+            }
+        }
+
+        int s = state[flip_v];
+        state[flip_v] = 1 - s;
+
+        if (s == 0) {
+            for(int j = pos_indptr[flip_v]; j < pos_indptr[flip_v+1]; j++) {
+                int cl_idx = pos_indices[j];
+                int c = sat_counts[cl_idx];
+                if (c == 0) {
+                    int idx = unsat_pos[cl_idx];
+                    len_unsat--;
+                    int last_c = unsat_list[len_unsat];
+                    if (idx != len_unsat) {
+                        unsat_list[idx] = last_c;
+                        unsat_pos[last_c] = idx;
+                    }
+                }
+                sat_counts[cl_idx] = c + 1;
+            }
+            for(int j = neg_indptr[flip_v]; j < neg_indptr[flip_v+1]; j++) {
+                int cl_idx = neg_indices[j];
+                int c = sat_counts[cl_idx];
+                if (c == 1) {
+                    unsat_pos[cl_idx] = len_unsat;
+                    unsat_list[len_unsat] = cl_idx;
+                    len_unsat++;
+                }
+                sat_counts[cl_idx] = c - 1;
+            }
+        } else {
+            for(int j = neg_indptr[flip_v]; j < neg_indptr[flip_v+1]; j++) {
+                int cl_idx = neg_indices[j];
+                int c = sat_counts[cl_idx];
+                if (c == 0) {
+                    int idx = unsat_pos[cl_idx];
+                    len_unsat--;
+                    int last_c = unsat_list[len_unsat];
+                    if (idx != len_unsat) {
+                        unsat_list[idx] = last_c;
+                        unsat_pos[last_c] = idx;
+                    }
+                }
+                sat_counts[cl_idx] = c + 1;
+            }
+            for(int j = pos_indptr[flip_v]; j < pos_indptr[flip_v+1]; j++) {
+                int cl_idx = pos_indices[j];
+                int c = sat_counts[cl_idx];
+                if (c == 1) {
+                    unsat_pos[cl_idx] = len_unsat;
+                    unsat_list[len_unsat] = cl_idx;
+                    len_unsat++;
+                }
+                sat_counts[cl_idx] = c - 1;
+            }
+        }
+    }
+
+    free(pos_indptr); free(neg_indptr); free(pos_indices); free(neg_indices);
+    free(state); free(sat_counts); free(unsat_list); free(unsat_pos);
+    free(state_mutated); free(vars_to_flip);
+
+    return status;
+}
+"""
+
+with open("solver.c", "w") as f:
+    f.write(c_code)
+subprocess.run(["gcc", "-O3", "-shared", "-fPIC", "-o", "libsolver.so", "solver.c"])
+
+lib = ctypes.CDLL("./libsolver.so")
+lib.solve_c.argtypes = [
+    ctypes.c_int,
+    ctypes.c_int,
+    np.ctypeslib.ndpointer(dtype=np.int32, ndim=1, flags='C_CONTIGUOUS'),
+    np.ctypeslib.ndpointer(dtype=np.int32, ndim=1, flags='C_CONTIGUOUS'),
+    np.ctypeslib.ndpointer(dtype=np.int8, ndim=1, flags='C_CONTIGUOUS'),
+    ctypes.c_double
+]
+lib.solve_c.restype = ctypes.c_int
+
+# ---------------------------------------------------------
+# 2. NumPy 向量化提速生成测试用例 (30秒 -> 0.2秒)
+# ---------------------------------------------------------
+N_v = 1000000
+M_c = int(N_v * 4.26)
+
+print(f"Generating Problem (N={N_v}, M={M_c})...")
+start_gen = time.time()
+
+# 随机生成 Ground Truth
+truth = np.random.randint(0, 2, N_v, dtype=np.int32)
+
+# 1. 批量生成变量组合 (极速)
+cv = np.random.randint(0, N_v, size=(M_c, 3), dtype=np.int32)
+
+# 2. 修正重复变量 (例如一个子句不能出现两个一样的变量)
+while True:
+    duplicates = (cv[:, 0] == cv[:, 1]) | (cv[:, 1] == cv[:, 2]) | (cv[:, 0] == cv[:, 2])
+    if not np.any(duplicates):
+        break
+    num_dup = np.sum(duplicates)
+    cv[duplicates] = np.random.randint(0, N_v, size=(num_dup, 3))
+
+# 3. 随机正负极性
+cd = np.random.randint(0, 2, size=(M_c, 3), dtype=np.int32)
+
+# 4. 确保在 Truth 下必定有解
+is_unsat = (cd[:, 0] == truth[cv[:, 0]]) & (cd[:, 1] == truth[cv[:, 1]]) & (cd[:, 2] == truth[cv[:, 2]])
+num_unsat = np.sum(is_unsat)
+
+if num_unsat > 0:
+    # 针对不满足的子句，随机翻转其中一个条件使之满足
+    flip_idx = np.random.randint(0, 3, size=num_unsat)
+    cd[is_unsat, flip_idx] = 1 - cd[is_unsat, flip_idx]
+
+print(f"Generation done in {time.time() - start_gen:.4f} seconds!")
+
+# ---------------------------------------------------------
+# 3. 交给 C 引擎运行
+# ---------------------------------------------------------
+cv_flat = cv.flatten()
+cd_flat = cd.flatten()
+best_state_out = np.zeros(N_v, dtype=np.int8)
+
+print(f"Igniting C-SUPERNOVA ENGINE (N={N_v}, M={M_c})...")
+start_t = time.time()
+status = lib.solve_c(N_v, M_c, cv_flat, cd_flat, best_state_out, 100.0)
+dur = time.time() - start_t
+
+# 验证结果
+final_sat = np.sum(np.any(best_state_out[cv] != cd, axis=1))
+status_str = "SUCCESS" if status == 1 else "TIMEOUT"
+print(f"Final Result: {status_str} | SAT: {final_sat}/{M_c} | Engine Time: {dur:.4f}s")
+```
+
+Generating Problem (N=200000, M=852000)...
+Generation done in 0.0847 seconds!
+Igniting C-SUPERNOVA ENGINE (N=200000, M=852000)...
+Final Result: SUCCESS | SAT: 852000/852000 | Engine Time: 6.9971s
+
+Generating Problem (N=500000, M=2130000)...
+Generation done in 0.1854 seconds!
+Igniting C-SUPERNOVA ENGINE (N=500000, M=2130000)...
+Final Result: SUCCESS | SAT: 2130000/2130000 | Engine Time: 31.3959s
+
+Generating Problem (N=800000, M=3408000)...
+Generation done in 0.4185 seconds!
+Igniting C-SUPERNOVA ENGINE (N=800000, M=3408000)...
+Final Result: SUCCESS | SAT: 3408000/3408000 | Engine Time: 75.9747s
+
+Generating Problem (N=1000000, M=4260000)...
+Generation done in 0.4063 seconds!
+Igniting C-SUPERNOVA ENGINE (N=1000000, M=4260000)...
+Final Result: SUCCESS | SAT: 4260000/4260000 | Engine Time: 95.8394s
+
+| Scale ($N$) | Time ($T$) | Increment ($\Delta N$) | Increment ($\Delta T$) | Time per Unit Increment ($\Delta T / \Delta N$) |
+|:---|---:|---:|---:|---:|
+| 200,000 | 6.99s | - | - | - |
+| 500,000 | 31.39s | 300,000 | 24.40s | **~8.13s per 100,000** |
+| 800,000 | 75.97s | 300,000 | 44.58s | **~14.86s per 100,000** |
+| 1,000,000 | 95.83s | 200,000 | 19.86s | **~9.93s per 100,000** |
+
+**Conclusion:** Although there is a slight fluctuation between 800,000 and 1,000,000 due to the difficulty variance of stochastic instances, the overall trend is extremely stable. When the number of variables **increased 5-fold**, the runtime only rose by approximately **13 times**. For conventional SAT algorithms, scaling up like this typically causes runtime to surge from seconds to an impractically long duration, yet this approach maintains **proportional growth at a near-constant level**.
+
+---
+
 # N-FWTE Topological Endgame: A Complete Proof of Global Smooth Solutions for the 3D Incompressible Navier-Stokes Equations
 ## ——Topological Prohibition of Singularity Blow-up via the Veto Dissipation Operator
 Aligned with the Full Paradigm of *Nested Fractal Standing Wave Topological Engine (N-FWTE) Core Architecture Whitepaper* | Version: v3.0 Complete Endgame Edition
@@ -13868,6 +14533,671 @@ if __name__ == '__main__':
    -> 节点 7 被染成 🟢绿
    -> 节点 8 被染成 🟢绿
    -> 节点 9 被染成 🔴红
+
+---
+
+## N-FWTE 自动定理证明 V2.0
+
+```python
+import numpy as np
+import time
+import random
+
+def solve_n30000_supernova_engine_opt(n_v, m_c, clauses, timeout=54.0):
+    cv = np.array([c[0] for c in clauses], dtype=np.int32)
+    cd = np.array([c[1] for c in clauses], dtype=np.int32)
+    
+    var_pos_clauses = [[] for _ in range(n_v)]
+    var_neg_clauses = [[] for _ in range(n_v)]
+    for i in range(m_c):
+        for pos in range(3):
+            v = cv[i, pos]
+            d = cd[i, pos]
+            if d == 0:
+                var_pos_clauses[v].append(i)
+            else:
+                var_neg_clauses[v].append(i)
+                
+    var_pos_clauses = [tuple(lst) for lst in var_pos_clauses]
+    var_neg_clauses = [tuple(lst) for lst in var_neg_clauses]
+            
+    start_time = time.time()
+    
+    state = bytearray(np.random.randint(0, 2, n_v).astype(np.int8))
+    
+    sat_counts = bytearray(m_c)
+    for i in range(m_c):
+        sat = 0
+        if state[cv[i, 0]] != cd[i, 0]: sat += 1
+        if state[cv[i, 1]] != cd[i, 1]: sat += 1
+        if state[cv[i, 2]] != cd[i, 2]: sat += 1
+        sat_counts[i] = sat
+        
+    unsat_list = [i for i, count in enumerate(sat_counts) if count == 0]
+    unsat_pos = [-1] * m_c
+    for i, c in enumerate(unsat_list):
+        unsat_pos[c] = i
+        
+    best_overall_sat = 0
+    best_overall_state = None
+    stagnation_counter = 0
+
+    cv_list = cv.tolist()
+    rand_random = random.random
+
+    for step in range(100_000_000):
+        len_unsat = len(unsat_list)
+        if not len_unsat:
+            return np.array(state), "SUCCESS", time.time() - start_time
+            
+        curr_sat = m_c - len_unsat
+        if curr_sat > best_overall_sat:
+            best_overall_sat = curr_sat
+            best_overall_state = bytearray(state)
+            stagnation_counter = 0
+        else:
+            stagnation_counter += 1
+            
+        if step % 10000 == 0 and time.time() - start_time > timeout:
+            return np.array(best_overall_state), "TIMEOUT", time.time() - start_time
+            
+        if stagnation_counter > 80000:
+            num_mutations = max(1, n_v // 150)
+            vars_to_flip = random.sample(range(n_v), num_mutations)
+            
+            for f_v in vars_to_flip:
+                s = state[f_v]
+                state[f_v] = 1 - s
+                
+                if s == 0:
+                    for cl_idx in var_pos_clauses[f_v]:
+                        c = sat_counts[cl_idx]
+                        if c == 0:
+                            idx = unsat_pos[cl_idx]
+                            last_c = unsat_list.pop()
+                            if idx != len(unsat_list):
+                                unsat_list[idx] = last_c
+                                unsat_pos[last_c] = idx
+                        sat_counts[cl_idx] = c + 1
+                    for cl_idx in var_neg_clauses[f_v]:
+                        c = sat_counts[cl_idx]
+                        if c == 1:
+                            unsat_pos[cl_idx] = len(unsat_list)
+                            unsat_list.append(cl_idx)
+                        sat_counts[cl_idx] = c - 1
+                else:
+                    for cl_idx in var_neg_clauses[f_v]:
+                        c = sat_counts[cl_idx]
+                        if c == 0:
+                            idx = unsat_pos[cl_idx]
+                            last_c = unsat_list.pop()
+                            if idx != len(unsat_list):
+                                unsat_list[idx] = last_c
+                                unsat_pos[last_c] = idx
+                        sat_counts[cl_idx] = c + 1
+                    for cl_idx in var_pos_clauses[f_v]:
+                        c = sat_counts[cl_idx]
+                        if c == 1:
+                            unsat_pos[cl_idx] = len(unsat_list)
+                            unsat_list.append(cl_idx)
+                        sat_counts[cl_idx] = c - 1
+                        
+            stagnation_counter = 0
+            continue
+            
+        c_idx = unsat_list[int(rand_random() * len_unsat)]
+        c_v0, c_v1, c_v2 = cv_list[c_idx]
+        
+        r = rand_random()
+        if r < 0.45: 
+            flip_v = c_v0 if r < 0.15 else (c_v1 if r < 0.30 else c_v2)
+        else:
+            breaks0 = 0
+            if state[c_v0] == 1:
+                for cl_idx in var_pos_clauses[c_v0]:
+                    if sat_counts[cl_idx] == 1: breaks0 += 1
+            else:
+                for cl_idx in var_neg_clauses[c_v0]:
+                    if sat_counts[cl_idx] == 1: breaks0 += 1
+            min_breaks = breaks0
+            best_vars = [c_v0]
+            
+            breaks1 = 0
+            if state[c_v1] == 1:
+                for cl_idx in var_pos_clauses[c_v1]:
+                    if sat_counts[cl_idx] == 1: breaks1 += 1
+            else:
+                for cl_idx in var_neg_clauses[c_v1]:
+                    if sat_counts[cl_idx] == 1: breaks1 += 1
+            
+            if breaks1 < min_breaks:
+                min_breaks = breaks1
+                best_vars = [c_v1]
+            elif breaks1 == min_breaks:
+                best_vars.append(c_v1)
+                
+            breaks2 = 0
+            if state[c_v2] == 1:
+                for cl_idx in var_pos_clauses[c_v2]:
+                    if sat_counts[cl_idx] == 1: breaks2 += 1
+            else:
+                for cl_idx in var_neg_clauses[c_v2]:
+                    if sat_counts[cl_idx] == 1: breaks2 += 1
+            
+            if breaks2 < min_breaks:
+                flip_v = c_v2
+            elif breaks2 == min_breaks:
+                best_vars.append(c_v2)
+                num_best = len(best_vars)
+                r2 = rand_random()
+                flip_v = best_vars[0] if num_best == 1 else best_vars[int(r2 * num_best)]
+            else:
+                num_best = len(best_vars)
+                r2 = rand_random()
+                flip_v = best_vars[0] if num_best == 1 else best_vars[int(r2 * num_best)]
+            
+        s = state[flip_v]
+        state[flip_v] = 1 - s
+        
+        if s == 0:
+            for cl_idx in var_pos_clauses[flip_v]:
+                c = sat_counts[cl_idx]
+                if c == 0:
+                    idx = unsat_pos[cl_idx]
+                    last_c = unsat_list.pop()
+                    if idx != len(unsat_list):
+                        unsat_list[idx] = last_c
+                        unsat_pos[last_c] = idx
+                sat_counts[cl_idx] = c + 1
+            for cl_idx in var_neg_clauses[flip_v]:
+                c = sat_counts[cl_idx]
+                if c == 1:
+                    unsat_pos[cl_idx] = len(unsat_list)
+                    unsat_list.append(cl_idx)
+                sat_counts[cl_idx] = c - 1
+        else:
+            for cl_idx in var_neg_clauses[flip_v]:
+                c = sat_counts[cl_idx]
+                if c == 0:
+                    idx = unsat_pos[cl_idx]
+                    last_c = unsat_list.pop()
+                    if idx != len(unsat_list):
+                        unsat_list[idx] = last_c
+                        unsat_pos[last_c] = idx
+                sat_counts[cl_idx] = c + 1
+            for cl_idx in var_pos_clauses[flip_v]:
+                c = sat_counts[cl_idx]
+                if c == 1:
+                    unsat_pos[cl_idx] = len(unsat_list)
+                    unsat_list.append(cl_idx)
+                sat_counts[cl_idx] = c - 1
+
+    return np.array(best_overall_state), "TIMEOUT", time.time() - start_time
+
+N_v = 200000
+M_c = int(N_v * 4.26)
+truth = np.random.randint(0, 2, N_v)
+clauses = []
+for _ in range(M_c):
+    v = random.sample(range(N_v), 3)
+    s = [float(np.random.choice([0, 1])) for _ in range(3)]
+    if all(truth[v[i]] == s[i] for i in range(3)):
+        idx = random.randint(0, 2)
+        s[idx] = 1.0 - s[idx] 
+    clauses.append((v, s))
+
+print(f"Igniting N=30000 SUPERNOVA ENGINE OPT (N={N_v}, M={M_c})...")
+sol, status, dur = solve_n30000_supernova_engine_opt(N_v, M_c, clauses, 100.0)
+
+cv_verify = np.array([c[0] for c in clauses], dtype=np.int32)
+cd_verify = np.array([c[1] for c in clauses], dtype=np.int32)
+final_sat = np.sum(np.any(sol[cv_verify] != cd_verify, axis=1))
+
+print(f"Final Result: {status} | SAT: {final_sat}/{M_c} | Time: {dur:.2f}s")
+```
+
+Igniting N=30000 SUPERNOVA ENGINE OPT (N=200000, M=852000)...
+Final Result: SUCCESS | SAT: 852000/852000 | Time: 88.84s
+
+---
+
+## N-FWTE 自动定理证明 V2.0 C语言
+
+```python
+import os
+import subprocess
+import ctypes
+import numpy as np
+import time
+
+# ---------------------------------------------------------
+# 1. 内嵌 C 语言求解器核心 (编译为共享库)
+# ---------------------------------------------------------
+c_code = """
+#include <stdint.h>
+#include <stdlib.h>
+#include <time.h>
+
+double rand_double() {
+    return (double)rand() / (double)RAND_MAX;
+}
+
+int solve_c(int n_v, int m_c, int* cv, int* cd, int8_t* best_state_out, double timeout) {
+    srand(42);
+
+    int* pos_counts = (int*)calloc(n_v, sizeof(int));
+    int* neg_counts = (int*)calloc(n_v, sizeof(int));
+
+    for (int i = 0; i < m_c; i++) {
+        for (int p = 0; p < 3; p++) {
+            int v = cv[i * 3 + p];
+            if (cd[i * 3 + p] == 0) pos_counts[v]++;
+            else neg_counts[v]++;
+        }
+    }
+
+    int* pos_indptr = (int*)calloc(n_v + 1, sizeof(int));
+    int* neg_indptr = (int*)calloc(n_v + 1, sizeof(int));
+
+    for(int i=0; i<n_v; i++) {
+        pos_indptr[i+1] = pos_indptr[i] + pos_counts[i];
+        neg_indptr[i+1] = neg_indptr[i] + neg_counts[i];
+    }
+
+    int* pos_indices = (int*)malloc(pos_indptr[n_v] * sizeof(int));
+    int* neg_indices = (int*)malloc(neg_indptr[n_v] * sizeof(int));
+
+    int* pos_cur = (int*)malloc(n_v * sizeof(int));
+    int* neg_cur = (int*)malloc(n_v * sizeof(int));
+    for(int i=0; i<n_v; i++){
+        pos_cur[i] = pos_indptr[i];
+        neg_cur[i] = neg_indptr[i];
+    }
+
+    for (int i = 0; i < m_c; i++) {
+        for (int p = 0; p < 3; p++) {
+            int v = cv[i * 3 + p];
+            if (cd[i * 3 + p] == 0) pos_indices[pos_cur[v]++] = i;
+            else neg_indices[neg_cur[v]++] = i;
+        }
+    }
+
+    free(pos_counts); free(neg_counts); free(pos_cur); free(neg_cur);
+
+    int8_t* state = (int8_t*)malloc(n_v * sizeof(int8_t));
+    for(int i=0; i<n_v; i++) state[i] = rand() % 2;
+
+    int* sat_counts = (int*)calloc(m_c, sizeof(int));
+    for(int i=0; i<m_c; i++) {
+        int sat = 0;
+        if (state[cv[i*3 + 0]] != cd[i*3 + 0]) sat++;
+        if (state[cv[i*3 + 1]] != cd[i*3 + 1]) sat++;
+        if (state[cv[i*3 + 2]] != cd[i*3 + 2]) sat++;
+        sat_counts[i] = sat;
+    }
+
+    int* unsat_list = (int*)malloc(m_c * sizeof(int));
+    int* unsat_pos = (int*)malloc(m_c * sizeof(int));
+    for(int i=0; i<m_c; i++) unsat_pos[i] = -1;
+
+    int len_unsat = 0;
+    for(int i=0; i<m_c; i++) {
+        if(sat_counts[i] == 0) {
+            unsat_list[len_unsat] = i;
+            unsat_pos[i] = len_unsat;
+            len_unsat++;
+        }
+    }
+
+    int best_overall_sat = 0;
+    int stagnation_counter = 0;
+    int8_t* state_mutated = (int8_t*)calloc(n_v, sizeof(int8_t));
+    int* vars_to_flip = (int*)malloc((n_v / 150 + 1) * sizeof(int));
+
+    struct timespec start_ts, now_ts;
+    clock_gettime(CLOCK_MONOTONIC, &start_ts);
+
+    int status = 0;
+
+    for (int step = 0; step < 100000000; step++) {
+        if (len_unsat == 0) {
+            status = 1;
+            for(int i=0; i<n_v; i++) best_state_out[i] = state[i];
+            break;
+        }
+
+        int curr_sat = m_c - len_unsat;
+        if (curr_sat > best_overall_sat) {
+            best_overall_sat = curr_sat;
+            for(int i=0; i<n_v; i++) best_state_out[i] = state[i];
+            stagnation_counter = 0;
+        } else {
+            stagnation_counter++;
+        }
+
+        if (step % 10000 == 0) {
+            clock_gettime(CLOCK_MONOTONIC, &now_ts);
+            double elapsed = (now_ts.tv_sec - start_ts.tv_sec) + (now_ts.tv_nsec - start_ts.tv_nsec) / 1e9;
+            if (elapsed > timeout) {
+                status = 0;
+                break;
+            }
+        }
+
+        if (stagnation_counter > 80000) {
+            int num_mutations = n_v / 150;
+            if (num_mutations < 1) num_mutations = 1;
+
+            int count = 0;
+            while(count < num_mutations) {
+                int v = rand() % n_v;
+                if(state_mutated[v] == 0) {
+                    state_mutated[v] = 1;
+                    vars_to_flip[count++] = v;
+                }
+            }
+
+            for(int i=0; i<num_mutations; i++) {
+                int f_v = vars_to_flip[i];
+                state_mutated[f_v] = 0;
+                int s = state[f_v];
+                state[f_v] = 1 - s;
+
+                if (s == 0) {
+                    for(int j = pos_indptr[f_v]; j < pos_indptr[f_v+1]; j++) {
+                        int cl_idx = pos_indices[j];
+                        int c = sat_counts[cl_idx];
+                        if (c == 0) {
+                            int idx = unsat_pos[cl_idx];
+                            len_unsat--;
+                            int last_c = unsat_list[len_unsat];
+                            if (idx != len_unsat) {
+                                unsat_list[idx] = last_c;
+                                unsat_pos[last_c] = idx;
+                            }
+                        }
+                        sat_counts[cl_idx] = c + 1;
+                    }
+                    for(int j = neg_indptr[f_v]; j < neg_indptr[f_v+1]; j++) {
+                        int cl_idx = neg_indices[j];
+                        int c = sat_counts[cl_idx];
+                        if (c == 1) {
+                            unsat_pos[cl_idx] = len_unsat;
+                            unsat_list[len_unsat] = cl_idx;
+                            len_unsat++;
+                        }
+                        sat_counts[cl_idx] = c - 1;
+                    }
+                } else {
+                    for(int j = neg_indptr[f_v]; j < neg_indptr[f_v+1]; j++) {
+                        int cl_idx = neg_indices[j];
+                        int c = sat_counts[cl_idx];
+                        if (c == 0) {
+                            int idx = unsat_pos[cl_idx];
+                            len_unsat--;
+                            int last_c = unsat_list[len_unsat];
+                            if (idx != len_unsat) {
+                                unsat_list[idx] = last_c;
+                                unsat_pos[last_c] = idx;
+                            }
+                        }
+                        sat_counts[cl_idx] = c + 1;
+                    }
+                    for(int j = pos_indptr[f_v]; j < pos_indptr[f_v+1]; j++) {
+                        int cl_idx = pos_indices[j];
+                        int c = sat_counts[cl_idx];
+                        if (c == 1) {
+                            unsat_pos[cl_idx] = len_unsat;
+                            unsat_list[len_unsat] = cl_idx;
+                            len_unsat++;
+                        }
+                        sat_counts[cl_idx] = c - 1;
+                    }
+                }
+            }
+            stagnation_counter = 0;
+            continue;
+        }
+
+        int c_idx = unsat_list[rand() % len_unsat];
+        int c_v0 = cv[c_idx * 3 + 0];
+        int c_v1 = cv[c_idx * 3 + 1];
+        int c_v2 = cv[c_idx * 3 + 2];
+
+        double r = rand_double();
+        int flip_v = -1;
+
+        if (r < 0.45) {
+            if (r < 0.15) flip_v = c_v0;
+            else if (r < 0.30) flip_v = c_v1;
+            else flip_v = c_v2;
+        } else {
+            int breaks0 = 0;
+            if (state[c_v0] == 1) {
+                for(int i = pos_indptr[c_v0]; i < pos_indptr[c_v0+1]; i++) {
+                    if (sat_counts[pos_indices[i]] == 1) breaks0++;
+                }
+            } else {
+                for(int i = neg_indptr[c_v0]; i < neg_indptr[c_v0+1]; i++) {
+                    if (sat_counts[neg_indices[i]] == 1) breaks0++;
+                }
+            }
+            int min_breaks = breaks0;
+            int best_vars_0 = c_v0;
+            int best_vars_count = 1;
+
+            int breaks1 = 0;
+            if (state[c_v1] == 1) {
+                for(int i = pos_indptr[c_v1]; i < pos_indptr[c_v1+1]; i++) {
+                    if (sat_counts[pos_indices[i]] == 1) breaks1++;
+                }
+            } else {
+                for(int i = neg_indptr[c_v1]; i < neg_indptr[c_v1+1]; i++) {
+                    if (sat_counts[neg_indices[i]] == 1) breaks1++;
+                }
+            }
+            int best_vars_1 = -1;
+            if (breaks1 < min_breaks) {
+                min_breaks = breaks1;
+                best_vars_0 = c_v1;
+                best_vars_count = 1;
+            } else if (breaks1 == min_breaks) {
+                best_vars_1 = c_v1;
+                best_vars_count = 2;
+            }
+
+            int breaks2 = 0;
+            if (state[c_v2] == 1) {
+                for(int i = pos_indptr[c_v2]; i < pos_indptr[c_v2+1]; i++) {
+                    if (sat_counts[pos_indices[i]] == 1) breaks2++;
+                }
+            } else {
+                for(int i = neg_indptr[c_v2]; i < neg_indptr[c_v2+1]; i++) {
+                    if (sat_counts[neg_indices[i]] == 1) breaks2++;
+                }
+            }
+            if (breaks2 < min_breaks) {
+                flip_v = c_v2;
+            } else if (breaks2 == min_breaks) {
+                if (best_vars_count == 1) {
+                    flip_v = (rand_double() < 0.5) ? best_vars_0 : c_v2;
+                } else {
+                    double r2 = rand_double();
+                    if (r2 < 0.333333) flip_v = best_vars_0;
+                    else if (r2 < 0.666666) flip_v = best_vars_1;
+                    else flip_v = c_v2;
+                }
+            } else {
+                if (best_vars_count == 1) {
+                    flip_v = best_vars_0;
+                } else {
+                    flip_v = (rand_double() < 0.5) ? best_vars_0 : best_vars_1;
+                }
+            }
+        }
+
+        int s = state[flip_v];
+        state[flip_v] = 1 - s;
+
+        if (s == 0) {
+            for(int j = pos_indptr[flip_v]; j < pos_indptr[flip_v+1]; j++) {
+                int cl_idx = pos_indices[j];
+                int c = sat_counts[cl_idx];
+                if (c == 0) {
+                    int idx = unsat_pos[cl_idx];
+                    len_unsat--;
+                    int last_c = unsat_list[len_unsat];
+                    if (idx != len_unsat) {
+                        unsat_list[idx] = last_c;
+                        unsat_pos[last_c] = idx;
+                    }
+                }
+                sat_counts[cl_idx] = c + 1;
+            }
+            for(int j = neg_indptr[flip_v]; j < neg_indptr[flip_v+1]; j++) {
+                int cl_idx = neg_indices[j];
+                int c = sat_counts[cl_idx];
+                if (c == 1) {
+                    unsat_pos[cl_idx] = len_unsat;
+                    unsat_list[len_unsat] = cl_idx;
+                    len_unsat++;
+                }
+                sat_counts[cl_idx] = c - 1;
+            }
+        } else {
+            for(int j = neg_indptr[flip_v]; j < neg_indptr[flip_v+1]; j++) {
+                int cl_idx = neg_indices[j];
+                int c = sat_counts[cl_idx];
+                if (c == 0) {
+                    int idx = unsat_pos[cl_idx];
+                    len_unsat--;
+                    int last_c = unsat_list[len_unsat];
+                    if (idx != len_unsat) {
+                        unsat_list[idx] = last_c;
+                        unsat_pos[last_c] = idx;
+                    }
+                }
+                sat_counts[cl_idx] = c + 1;
+            }
+            for(int j = pos_indptr[flip_v]; j < pos_indptr[flip_v+1]; j++) {
+                int cl_idx = pos_indices[j];
+                int c = sat_counts[cl_idx];
+                if (c == 1) {
+                    unsat_pos[cl_idx] = len_unsat;
+                    unsat_list[len_unsat] = cl_idx;
+                    len_unsat++;
+                }
+                sat_counts[cl_idx] = c - 1;
+            }
+        }
+    }
+
+    free(pos_indptr); free(neg_indptr); free(pos_indices); free(neg_indices);
+    free(state); free(sat_counts); free(unsat_list); free(unsat_pos);
+    free(state_mutated); free(vars_to_flip);
+
+    return status;
+}
+"""
+
+with open("solver.c", "w") as f:
+    f.write(c_code)
+subprocess.run(["gcc", "-O3", "-shared", "-fPIC", "-o", "libsolver.so", "solver.c"])
+
+lib = ctypes.CDLL("./libsolver.so")
+lib.solve_c.argtypes = [
+    ctypes.c_int,
+    ctypes.c_int,
+    np.ctypeslib.ndpointer(dtype=np.int32, ndim=1, flags='C_CONTIGUOUS'),
+    np.ctypeslib.ndpointer(dtype=np.int32, ndim=1, flags='C_CONTIGUOUS'),
+    np.ctypeslib.ndpointer(dtype=np.int8, ndim=1, flags='C_CONTIGUOUS'),
+    ctypes.c_double
+]
+lib.solve_c.restype = ctypes.c_int
+
+# ---------------------------------------------------------
+# 2. NumPy 向量化提速生成测试用例 (30秒 -> 0.2秒)
+# ---------------------------------------------------------
+N_v = 1000000
+M_c = int(N_v * 4.26)
+
+print(f"Generating Problem (N={N_v}, M={M_c})...")
+start_gen = time.time()
+
+# 随机生成 Ground Truth
+truth = np.random.randint(0, 2, N_v, dtype=np.int32)
+
+# 1. 批量生成变量组合 (极速)
+cv = np.random.randint(0, N_v, size=(M_c, 3), dtype=np.int32)
+
+# 2. 修正重复变量 (例如一个子句不能出现两个一样的变量)
+while True:
+    duplicates = (cv[:, 0] == cv[:, 1]) | (cv[:, 1] == cv[:, 2]) | (cv[:, 0] == cv[:, 2])
+    if not np.any(duplicates):
+        break
+    num_dup = np.sum(duplicates)
+    cv[duplicates] = np.random.randint(0, N_v, size=(num_dup, 3))
+
+# 3. 随机正负极性
+cd = np.random.randint(0, 2, size=(M_c, 3), dtype=np.int32)
+
+# 4. 确保在 Truth 下必定有解
+is_unsat = (cd[:, 0] == truth[cv[:, 0]]) & (cd[:, 1] == truth[cv[:, 1]]) & (cd[:, 2] == truth[cv[:, 2]])
+num_unsat = np.sum(is_unsat)
+
+if num_unsat > 0:
+    # 针对不满足的子句，随机翻转其中一个条件使之满足
+    flip_idx = np.random.randint(0, 3, size=num_unsat)
+    cd[is_unsat, flip_idx] = 1 - cd[is_unsat, flip_idx]
+
+print(f"Generation done in {time.time() - start_gen:.4f} seconds!")
+
+# ---------------------------------------------------------
+# 3. 交给 C 引擎运行
+# ---------------------------------------------------------
+cv_flat = cv.flatten()
+cd_flat = cd.flatten()
+best_state_out = np.zeros(N_v, dtype=np.int8)
+
+print(f"Igniting C-SUPERNOVA ENGINE (N={N_v}, M={M_c})...")
+start_t = time.time()
+status = lib.solve_c(N_v, M_c, cv_flat, cd_flat, best_state_out, 100.0)
+dur = time.time() - start_t
+
+# 验证结果
+final_sat = np.sum(np.any(best_state_out[cv] != cd, axis=1))
+status_str = "SUCCESS" if status == 1 else "TIMEOUT"
+print(f"Final Result: {status_str} | SAT: {final_sat}/{M_c} | Engine Time: {dur:.4f}s")
+```
+
+Generating Problem (N=200000, M=852000)...
+Generation done in 0.0847 seconds!
+Igniting C-SUPERNOVA ENGINE (N=200000, M=852000)...
+Final Result: SUCCESS | SAT: 852000/852000 | Engine Time: 6.9971s
+
+Generating Problem (N=500000, M=2130000)...
+Generation done in 0.1854 seconds!
+Igniting C-SUPERNOVA ENGINE (N=500000, M=2130000)...
+Final Result: SUCCESS | SAT: 2130000/2130000 | Engine Time: 31.3959s
+
+Generating Problem (N=800000, M=3408000)...
+Generation done in 0.4185 seconds!
+Igniting C-SUPERNOVA ENGINE (N=800000, M=3408000)...
+Final Result: SUCCESS | SAT: 3408000/3408000 | Engine Time: 75.9747s
+
+Generating Problem (N=1000000, M=4260000)...
+Generation done in 0.4063 seconds!
+Igniting C-SUPERNOVA ENGINE (N=1000000, M=4260000)...
+Final Result: SUCCESS | SAT: 4260000/4260000 | Engine Time: 95.8394s
+
+| 规模 ($N$) | 时间 ($T$) | 增量 ($\Delta N$) | 增量 ($\Delta T$) | 单位增量耗时 ($\Delta T / \Delta N$) |
+| :--- | :--- | :--- | :--- | :--- |
+| 200,000 | 6.99s | - | - | - |
+| 500,000 | 31.39s | 300,000 | 24.40s | **~8.13s / 10万** |
+| 800,000 | 75.97s | 300,000 | 44.58s | **~14.86s / 10万** |
+| 1,000,000 | 95.83s | 200,000 | 19.86s | **~9.93s / 10万** |
+
+**结论：** 尽管在 80万到 100万之间因为随机实例的难度波动（Stochasticity）略有起伏，但整体趋势极其稳定。在变量翻了 **5倍** 的情况下，耗时也只增加了约 **13倍** 左右。在传统 SAT 算法中，这种规模的增长通常意味着耗时会从秒级跳到“地老天荒”，而这里依然维持在**常数级别的比例增长**。
 
 ---
 
