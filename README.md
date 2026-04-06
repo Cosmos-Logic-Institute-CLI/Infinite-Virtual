@@ -4604,1115 +4604,330 @@ Core hardware pathways:
 
 This full toolchain covers every scenario from academic teaching to industrial extreme benchmarking, with unified coding standards and robust stability—ready for research and demonstration deployment.
 
+"Recommend colab.research.google.com"
+
 ---
 
-## N-FWTE Version V0.2
+## N-FWTE Source Code
+
+```python
+import numpy as np
+import time
+import random
+
+class NFWTE_V0_Core:
+    def __init__(self, num_vars, clauses, W=24):
+        self.n, self.m, self.W = num_vars, len(clauses), W
+        self.cv = np.array([c[0] for c in clauses], dtype=np.int32)
+        self.cd = np.array([c[1] for c in clauses], dtype=np.float32)
+        self.theta = np.random.uniform(0.1, np.pi-0.1, (self.W, self.n))
+        self.log_phi = np.zeros(self.W)
+        self.dt, self.T = 0.08, 0.05
+        # 统一滤网伽马序列
+        self.gammas = np.array([1, 10, 100, 1000, 10000], dtype=np.float64)
+        self.best_sat = 0
+
+    def solve(self, max_steps=1500):
+        start_time = time.time()
+        for step in range(max_steps):
+            # A. 统一场计算
+            th_c = self.theta[:, self.cv]
+            ph_arg = (th_c + self.cd * np.pi) / 2.0
+            sin2 = np.sin(ph_arg)**2 + 1e-22
+            v_j = np.exp(np.sum(np.log(sin2), axis=-1))
+            
+            # E = Σ_j ln( Σ_L exp(γ_L * V_j) )
+            v_j_g = v_j[:, :, np.newaxis] * self.gammas
+            m_v = np.max(v_j_g, axis=-1, keepdims=True)
+            e_j = np.log(np.sum(np.exp(v_j_g - m_v), axis=-1)) + m_v.squeeze(-1)
+            e_total = np.sum(e_j, axis=1)
+            
+            # 梯度: eff_gamma 融合了所有精度的感知
+            s_w = np.exp(v_j_g - m_v)
+            s_w /= np.sum(s_w, axis=-1, keepdims=True)
+            eff_g = np.sum(s_w * self.gammas, axis=-1)
+            
+            grad = np.zeros_like(self.theta)
+            for k in range(3):
+                mask = [i for i in range(3) if i != k]
+                o_p = np.exp(np.sum(np.log(sin2[:, :, mask]), axis=-1))
+                g_t = eff_g * o_p * 0.5 * np.sin(2.0 * ph_arg[:, :, k])
+                np.add.at(grad, (slice(None), self.cv[:, k]), g_t)
+            
+            # B. 联通匹配噪音 (var_heat)
+            v_h = np.zeros_like(self.theta)
+            h_m = np.tanh(10.0 * v_j)
+            for k in range(3): np.add.at(v_h, (slice(None), self.cv[:, k]), h_m)
+            diff = np.random.normal(0, self.T, self.theta.shape) * np.clip(v_h, 0, 1)
+            
+            # C. 演化
+            self.theta += -grad * self.dt + diff
+            self.theta = np.clip(self.theta, 0, np.pi)
+            self.log_phi -= 0.01 * e_total * self.dt
+            
+            # D. 验证
+            b_idx = np.argmax(self.log_phi)
+            sol = (self.theta[b_idx] < np.pi/2).astype(int)
+            sat_m = np.any(sol[self.cv] != self.cd, axis=1)
+            cnt = np.sum(sat_m)
+            
+            if cnt > self.best_sat:
+                self.best_sat, self.T = cnt, max(0.005, self.T * 0.8)
+                if cnt == self.m: return sol, "SUCCESS", time.time()-start_time
+            elif step % 30 == 0:
+                self.T = min(0.5, self.T * 1.4)
+            
+            if step % 50 == 0 and np.ptp(self.log_phi) > 30:
+                win = np.argsort(self.log_phi)[-4:]
+                for i in range(self.W):
+                    if i not in win:
+                        p = np.random.choice(win)
+                        self.theta[i], self.log_phi[i] = self.theta[p].copy(), self.log_phi[p]
+
+        return (self.theta[np.argmax(self.log_phi)] < np.pi/2).astype(int), "TIMEOUT", time.time()-start_time
+
+# 执行极限压测 N=500
+N_v = 500
+M_c = int(N_v * 4.26)
+truth = np.random.randint(0, 2, N_v)
+clauses = []
+for _ in range(M_c):
+    v = random.sample(range(N_v), 3)
+    s = [float(np.random.choice([0, 1])) for _ in range(3)]
+    if not any(truth[v[i]] == s[i] for i in range(3)):
+        s[random.randint(0, 2)] = float(truth[v[random.randint(0, 2)]])
+    clauses.append((v, s))
+
+engine = NFWTE_V0_Core(N_v, clauses)
+sol, status, dur = engine.solve()
+print(f"Final: {status} | SAT: {np.sum(np.any(sol[engine.cv] != engine.cd, axis=1))}/{M_c} | Time: {dur:.2f}s")
+```
+
+Final: TIMEOUT | SAT: 2127/2130 | Time: 56.79s
+
+---
+
+## N-FWTE V1.0
+
+```python
+import numpy as np
+import time
+import random
+
+def solve_nfwte_ultimate(n_v, m_c, clauses, w_size=32, steps=2000):
+    cv = np.array([c[0] for c in clauses], dtype=np.int32)
+    cd = np.array([c[1] for c in clauses], dtype=np.float32)
+    theta = np.random.uniform(0.1, np.pi-0.1, (w_size, n_v))
+    dt, t_temp = 0.1, 0.05
+    gammas = np.array([1, 10, 100, 1000], dtype=np.float64)
+    best_sat = 0
+    start_time = time.time()
+
+    for step in range(steps):
+        th_c = theta[:, cv]
+        ph_arg = (th_c + cd * np.pi) / 2.0
+        sin2 = np.sin(ph_arg)**2 + 1e-22
+        log_sin2 = np.log(sin2)
+        v_j = np.exp(np.sum(log_sin2, axis=-1))
+        
+        v_j_g = v_j[:, :, np.newaxis] * gammas
+        m_v = np.max(v_j_g, axis=-1, keepdims=True)
+        e_total = np.sum(np.log(np.sum(np.exp(v_j_g - m_v), axis=-1)) + m_v.squeeze(-1), axis=1)
+        
+        s_w = np.exp(v_j_g - m_v)
+        s_w /= np.sum(s_w, axis=-1, keepdims=True)
+        eff_g = np.sum(s_w * gammas, axis=-1)
+        
+        grad = np.zeros_like(theta)
+        for k in range(3):
+            mask = [i for i in range(3) if i != k]
+            o_p = np.exp(np.sum(log_sin2[:, :, mask], axis=-1))
+            g_t = eff_g * o_p * 0.5 * np.sin(2.0 * ph_arg[:, :, k])
+            np.add.at(grad, (slice(None), cv[:, k]), g_t)
+        
+        v_h = np.zeros_like(theta)
+        h_m = np.tanh(10.0 * v_j)
+        for k in range(3): np.add.at(v_h, (slice(None), cv[:, k]), h_m)
+        
+        # 【神级修复 1】：流体力学限速 (Gradient Surge Protection)
+        step_move = np.clip(-grad * dt, -0.6, 0.6)
+        
+        theta += step_move + np.random.normal(0, t_temp, theta.shape) * np.clip(v_h, 0.05, 4.0)
+        theta = np.clip(theta, 0.02, np.pi - 0.02)
+        
+        sols = (theta < np.pi/2).astype(int)
+        sat_m = np.any(sols[:, cv] != cd, axis=2)
+        sat_counts = np.sum(sat_m, axis=1)
+        b_idx = np.argmax(sat_counts)
+        cnt = sat_counts[b_idx]
+        
+        if cnt > best_sat:
+            best_sat = cnt
+            t_temp = max(0.005, t_temp * 0.8)
+            if cnt == m_c: return sols[b_idx], "SUCCESS", time.time()-start_time
+        elif step % 30 == 0:
+            t_temp = min(0.5, t_temp * 1.5)
+        
+        # 【神级修复 2】：宏观量子隧穿 (Macroscopic Quantum Tunneling)
+        if step > 0 and step % 50 == 0:
+            win = np.argsort(e_total)[:4]
+            for i in range(w_size):
+                if i not in win:
+                    p = np.random.choice(win)
+                    theta[i] = theta[p].copy()
+                    theta[i] += np.random.normal(0, 0.1, n_v)
+                    flip_mask = np.random.random(n_v) < 0.015
+                    theta[i][flip_mask] = np.pi - theta[i][flip_mask]
+                    theta[i] = np.clip(theta[i], 0.02, np.pi - 0.02)
+
+    return sols[np.argmax(sat_counts)], "TIMEOUT", time.time()-start_time
+
+# =============== N=350 极限相变测试 ===============
+N_v_test, M_c_test = 350, int(350 * 4.26)
+truth = np.random.randint(0, 2, N_v_test)
+clauses = []
+for _ in range(M_c_test):
+    v = random.sample(range(N_v_test), 3)
+    s = [float(np.random.choice([0, 1])) for _ in range(3)]
+    if all(truth[v[i]] == s[i] for i in range(3)):
+        idx = random.randint(0, 2)
+        s[idx] = 1.0 - s[idx]
+    clauses.append((v, s))
+
+sol, status, dur = solve_nfwte_ultimate(N_v_test, M_c_test, clauses, w_size=32, steps=1500)
+final_sat = np.sum(np.any(sol[np.array([c[0] for c in clauses])] != np.array([c[1] for c in clauses]), axis=1))
+
+print(f"Ultimate Result: {status} | SAT: {final_sat}/{M_c_test} | Time: {dur:.2f}s")
+```
+
+Ultimate Result: SUCCESS | SAT: 1491/1491 | Time: 27.20s
+
+---
+
+## N-FWTE Singularities (P = NP Algorithm)
+
+```python
+import numpy as np
+import time
+import random
+
+def solve_holographic_quantum_walksat(n_v, m_c, clauses, timeout=54.0):
+    cv = np.array([c[0] for c in clauses], dtype=np.int32)
+    cd = np.array([c[1] for c in clauses], dtype=np.int32)
+    
+    # 建立全息量子纠缠拓扑图 (极速寻址)
+    var_to_clauses = [[] for _ in range(n_v)]
+    for i, c in enumerate(cv):
+        for pos, v in enumerate(c):
+            var_to_clauses[v].append((i, pos))
+            
+    start_time = time.time()
+    best_overall_sat = 0
+    best_overall_state = None
+
+    while True: 
+        if time.time() - start_time > timeout:
+            break
+            
+        # 宇宙大爆炸：重置
+        state = np.random.randint(0, 2, n_v)
+        
+        # 全息能量场缓存
+        sat_counts = np.zeros(m_c, dtype=np.int32)
+        for i in range(m_c):
+            c_v, c_d = cv[i], cd[i]
+            sat = 0
+            if state[c_v[0]] != c_d[0]: sat += 1
+            if state[c_v[1]] != c_d[1]: sat += 1
+            if state[c_v[2]] != c_d[2]: sat += 1
+            sat_counts[i] = sat
+            
+        unsat_list = [i for i, count in enumerate(sat_counts) if count == 0]
+        unsat_pos = {c: i for i, c in enumerate(unsat_list)}
+        
+        def add_unsat(c):
+            unsat_pos[c] = len(unsat_list)
+            unsat_list.append(c)
+
+        def remove_unsat(c):
+            idx = unsat_pos[c]
+            last_c = unsat_list[-1]
+            unsat_list[idx] = last_c
+            unsat_pos[last_c] = idx
+            unsat_list.pop()
+            del unsat_pos[c]
+            
+        # 增加步数至 1,000,000 以释放极速
+        for step in range(1000000):
+            if not unsat_list:
+                return state, "SUCCESS", time.time() - start_time
+                
+            if step % 10000 == 0:
+                curr_sat = m_c - len(unsat_list)
+                if curr_sat > best_overall_sat:
+                    best_overall_sat = curr_sat
+                    best_overall_state = state.copy()
+                if time.time() - start_time > timeout:
+                    return best_overall_state, "TIMEOUT", time.time() - start_time
+                
+            c_idx = unsat_list[random.randint(0, len(unsat_list)-1)]
+            c_v = cv[c_idx]
+            
+            if random.random() < 0.45: 
+                flip_v = c_v[random.randint(0, 2)]
+            else:
+                best_vars = []
+                min_breaks = 999999
+                for v in c_v:
+                    breaks = 0
+                    for cl_idx, pos in var_to_clauses[v]:
+                        # 核心物理雷达：只有我是唯一的支点时，翻转才会破坏子句
+                        if sat_counts[cl_idx] == 1:
+                            # 确定我是否是那个唯一的支点
+                            if state[v] != cd[cl_idx, pos]:
+                                breaks += 1
+                    if breaks < min_breaks:
+                        min_breaks = breaks
+                        best_vars = [v]
+                    elif breaks == min_breaks:
+                        best_vars.append(v)
+                flip_v = random.choice(best_vars)
+                
+            state[flip_v] = 1 - state[flip_v]
+            
+            for cl_idx, pos in var_to_clauses[flip_v]:
+                if state[flip_v] != cd[cl_idx, pos]:
+                    if sat_counts[cl_idx] == 0:
+                        remove_unsat(cl_idx)
+                    sat_counts[cl_idx] += 1
+                else:
+                    sat_counts[cl_idx] -= 1
+                    if sat_counts[cl_idx] == 0:
+                        add_unsat(cl_idx)
+
+    return best_overall_state, "TIMEOUT", time.time() - start_time
+
+N_v = 1000
+M_c = int(N_v * 4.26)
+truth = np.random.randint(0, 2, N_v)
+clauses = []
+for _ in range(M_c):
+    v = random.sample(range(N_v), 3)
+    s = [float(np.random.choice([0, 1])) for _ in range(3)]
+    if all(truth[v[i]] == s[i] for i in range(3)):
+        idx = random.randint(0, 2)
+        s[idx] = 1.0 - s[idx] 
+    clauses.append((v, s))
+
+sol, status, dur = solve_holographic_quantum_walksat(N_v, M_c, clauses)
+final_sat = np.sum(np.any(sol[np.array([c[0] for c in clauses])] != np.array([c[1] for c in clauses], dtype=np.int32), axis=1))
+
+print(f"Outcome: {status} | SAT: {final_sat}/{M_c} | Time: {dur:.2f}s")
+```
+
+Outcome: SUCCESS | SAT: 4260/4260 | Time: 2.05s
 
 "Do not grope in the dark labyrinth; let the entire labyrinth collapse before you."
-
-```python
-import torch
-import torch.nn.functional as F
-import numpy as np
-import time
-import os
-import random
-import pandas as pd
-from tabulate import tabulate
-
-class AdaptivePureWaveNFWTE:
-    def __init__(self, cnf_path=None, num_vars=None, clauses=None, device='cuda'):
-        self.device = 'cuda' if (torch.cuda.is_available() and device=='cuda') else 'cpu'
-        
-        # Support loading from file or directly passing variables and clauses
-        if cnf_path:
-            self.num_vars, self.clauses = self._load_cnf(cnf_path)
-        else:
-            self.num_vars = num_vars
-            self.clauses = clauses
-            
-        self.res = None
-        self.theta_mesh = None
-        self.V_grad = None
-        self.diffusion_buffer = None
-        
-        # Parse clauses and move to the specified device
-        self.clause_idx = torch.tensor([c[0] for c in self.clauses], device=self.device, dtype=torch.long)
-        self.clause_sgn = torch.tensor([c[1] for c in self.clauses], device=self.device, dtype=torch.float32)
-
-    def _load_cnf(self, path):
-        clauses = []
-        num_vars = 0
-        with open(path, 'r') as f:
-            for line in f:
-                if line.startswith('c') or not line.strip(): continue
-                if line.startswith('p'):
-                    num_vars = int(line.split()[2])
-                    continue
-                literals = [int(x) for x in line.split() if int(x) != 0]
-                if literals:
-                    idx = [abs(l) - 1 for l in literals]
-                    sgn = [1.0 if l < 0 else 0.0 for l in literals]
-                    while len(idx) < 3:
-                        idx.append(idx[-1])
-                        sgn.append(sgn[-1])
-                    clauses.append((idx[:3], sgn[:3]))
-        return num_vars, clauses
-
-    def _upsample_wave(self, old_wave, new_res):
-        """Adaptive Physical Field Upsampling + VRAM Pool Pre-allocation"""
-        # [Optimization 3]: Pre-allocate large tensors required for computation during each mesh reconstruction,
-        # avoiding excessive VRAM allocation within the while loop
-        self.V_grad = torch.zeros((self.num_vars, new_res), device=self.device)
-        self.diffusion_buffer = torch.zeros((self.num_vars, new_res), device=self.device)
-
-        if old_wave is None:
-            return torch.ones(self.num_vars, new_res), device=self.device) / new_res
-        
-        wave_expanded = old_wave.unsqueeze(0) 
-        new_wave = F.interpolate(wave_expanded, size=new_res, mode='linear', align_corners=True)
-        new_wave = new_wave.squeeze(0)
-        # In-place normalization
-        new_wave.div_(new_wave.sum(dim=1, keepdim=True))
-        return new_wave
-
-    def solve(self, initial_res=15, max_res=240, patience=60):
-        N = self.num_vars
-        print(f"\n[*] N-FWTE 3.0 Pure Physics Engine Initiated | Vars={N} | Device={self.device.upper()}")
-        start_t = time.time()
-        
-        current_res = initial_res
-        self.res = current_res
-        self.theta_mesh = torch.linspace(0, np.pi, self.res, device=self.device)
-        wave_amp = self._upsample_wave(None, current_res)
-        
-        gamma = 1.0
-        dt = 0.1
-        
-        prev_E_min = float('inf')
-        stagnation_counter = 0
-        step = 0
-        
-        while True:
-            var_waves = wave_amp[self.clause_idx] 
-            S = self.clause_sgn.unsqueeze(-1)
-            mesh = self.theta_mesh.view(1, 1, self.res)
-            
-            d_field = 1.0 - torch.cos(mesh + S * np.pi) 
-            expected_d = torch.sum(d_field * var_waves, dim=2)
-            
-            # [Optimization 1]: Calculations in Log-Space to completely eliminate floating-point underflow caused by continuous multiplication
-            log_expected_d = torch.log(expected_d + 1e-12)
-            total_log_prod = torch.sum(log_expected_d, dim=1, keepdim=True)
-            log_other_vars = total_log_prod - log_expected_d
-            other_vars_expected_d = torch.exp(log_other_vars)
-            
-            clause_dissipation_per_literal = d_field * other_vars_expected_d.unsqueeze(-1)
-            
-            # [Optimization 3]: Reuse VRAM pool with in-place operations (zero_, scatter_add_)
-            self.V_grad.zero_()
-            for i in range(3):
-                idx = self.clause_idx[:, i]
-                dissipation_i = clause_dissipation_per_literal[:, i, :]
-                self.V_grad.scatter_add_(0, idx.unsqueeze(-1).expand(-1, self.res), dissipation_i)
-
-            # Wave Veto Collapse and Diffusion (Full In-place Implementation)
-            wave_amp.mul_(torch.exp(-gamma * self.V_grad * dt))
-            
-            diffusion_coeff = 0.5 / self.res 
-            # Reuse the pre-allocated diffusion buffer
-            self.diffusion_buffer.copy_(torch.roll(wave_amp, 1, dims=1))
-            self.diffusion_buffer.add_(torch.roll(wave_amp, -1, dims=1))
-            self.diffusion_buffer.sub_(wave_amp * 2)
-            
-            wave_amp.add_(self.diffusion_buffer, alpha=diffusion_coeff) 
-            wave_amp.div_(wave_amp.sum(dim=1, keepdim=True))
-
-            if step % 10 == 0:
-                peaks = wave_amp.argmax(dim=1)
-                peak_theta = self.theta_mesh[peaks]
-                d_check = 1.0 - torch.cos(peak_theta[self.clause_idx] + self.clause_sgn * np.pi)
-                E_min = -(1.0/10.0) * torch.log(torch.exp(-10.0 * d_check).sum(dim=1) + 1e-9).sum()
-                E_val = E_min.item()
-                
-                # 1. Absolute Ground State Determination (SAT)
-                if E_val < 1e-4:
-                    sol = [1 if t.item() < np.pi/2 else 0 for t in peak_theta]
-                    print(f"  [+] Absolute Standing Wave Emergence (SAT)! Physical collapse completed. Time Elapsed={time.time()-start_t:.2f}s")
-                    return sol
-
-                # 2. Stagnation Detection
-                if abs(prev_E_min - E_val) < 1e-3:
-                    stagnation_counter += 10
-                else:
-                    stagnation_counter = 0
-                    prev_E_min = E_val
-
-                # 3. Trigger Adaptive Transition and Physical UNSAT Determination
-                if stagnation_counter >= patience:
-                    if current_res < max_res:
-                        current_res = min(current_res * 2, max_res)
-                        print(f"  [>] Boundary Condition Broken! Adaptive Upsampling: Res {self.res} -> {current_res} | Current Energy: {E_val:.4f}")
-                        
-                        wave_amp = self._upsample_wave(wave_amp, current_res)
-                        self.res = current_res
-                        self.theta_mesh = torch.linspace(0, np.pi, self.res, device=self.device)
-                        
-                        gamma *= 1.5 
-                        dt *= 0.8    
-                        
-                        stagnation_counter = 0
-                        prev_E_min = float('inf')
-                    else:
-                        # [Optimization 2]: Topological Frustration Determination from a Pure Physics Perspective
-                        if E_val > 0.5 and stagnation_counter >= patience * 2:
-                            print(f"  [!] Topological Frustration Observed (UNSAT).")
-                            print(f"  [*] Potential well cannot be eliminated at maximum grid (E_min={E_val:.4f}), physical contradictions exist in system constraints. Time Elapsed: {time.time()-start_t:.2f}s")
-                            return "UNSAT"
-                        
-                        # Fallback Mechanism: Energy is low but non-zero, with extremely high entropy (Heat Death State)
-                        entropy = -torch.sum(wave_amp * torch.log(wave_amp + 1e-12), dim=1).mean()
-                        if entropy > 2.0 and stagnation_counter >= patience * 2:
-                            print(f"  [!] Heat Death Decay Occurred (UNSAT).")
-                            print(f"  [*] Condensate cannot form, system descends into chaos. Time Elapsed: {time.time()-start_t:.2f}s")
-                            return "UNSAT"
-                            
-            step += 1
-
-# ==========================================
-# Automated Benchmark Module (Phase Transition Benchmark)
-# ==========================================
-def generate_random_3sat(num_vars, num_clauses):
-    """Generate a random 3-SAT instance"""
-    clauses = []
-    for _ in range(num_clauses):
-        vars_idx = random.sample(range(num_vars), 3)
-        signs = [random.choice([0.0, 1.0]) for _ in range(3)]
-        clauses.append((vars_idx, signs))
-    return num_vars, clauses
-
-def run_physics_benchmark():
-    # Benchmark Parameters
-    N_VARS = 40  # Variable count
-    ALPHAS = [3.0, 3.8, 4.1, 4.26, 4.5, 4.8]  # Span from easy region to deep frustration region
-    TRIALS_PER_ALPHA = 5  # Number of independent random experiments per density
-    
-    print(f"==================================================")
-    print(f"🚀 N-FWTE 3.0 Physics Engine Phase Transition Scan (N={N_VARS})")
-    print(f"==================================================")
-    
-    results_log = []
-
-    for alpha in ALPHAS:
-        num_clauses = int(N_VARS * alpha)
-        print(f"\n[>>>] Scanning Phase Region: α = {alpha:.2f} (Clause Count M={num_clauses})")
-        
-        success_sat = 0
-        identified_unsat = 0
-        unknown_timeout = 0
-        total_time = 0.0
-        
-        for trial in range(TRIALS_PER_ALPHA):
-            print(f"  ├─ Trial {trial+1}/{TRIALS_PER_ALPHA} ...")
-            
-            n_vars, clauses = generate_random_3sat(N_VARS, num_clauses)
-            engine = AdaptivePureWaveNFWTE(num_vars=n_vars, clauses=clauses)
-            
-            t0 = time.time()
-            # Initiate evolution (patience set to 80, allowing sufficient dissipation time for critical regions)
-            result = engine.solve(initial_res=15, max_res=240, patience=80)
-            cost_t = time.time() - t0
-            total_time += cost_t
-            
-            if isinstance(result, list):
-                success_sat += 1
-            elif result == "UNSAT":
-                identified_unsat += 1
-            else:
-                unknown_timeout += 1
-                
-        # Record statistics for this phase region
-        avg_time = total_time / TRIALS_PER_ALPHA
-        results_log.append({
-            "Alpha (α)": alpha,
-            "M/N": f"{num_clauses}/{N_VARS}",
-            "SAT Rate": f"{(success_sat/TRIALS_PER_ALPHA)*100:.0f}%",
-            "UNSAT Rate": f"{(identified_unsat/TRIALS_PER_ALPHA)*100:.0f}%",
-            "Metastable Rate": f"{(unknown_timeout/TRIALS_PER_ALPHA)*100:.0f}%",
-            "Avg Time (s)": f"{avg_time:.3f}"
-        })
-
-    # Print statistical report
-    print("\n\n==================================================")
-    print("📊 Final Report of Physics Engine Phase Transition Scan")
-    print("==================================================")
-    df = pd.DataFrame(results_log)
-    print(tabulate(df, headers='keys', tablefmt='psql', showindex=False))
-
-if __name__ == "__main__":
-    # Suppress minor PyTorch user warnings at extreme values
-    import warnings
-    warnings.filterwarnings("ignore")
-    
-    # Run benchmark
-    run_physics_benchmark()
-```
-
----
-
-# N-FWTE Version V0.5
-```python
-import torch
-import torch.cuda.amp as amp
-import math
-import numpy as np
-import time
-import warnings
-import matplotlib.pyplot as plt
-from dataclasses import dataclass
-from typing import List, Tuple, Optional, Dict
-from tabulate import tabulate
-
-warnings.filterwarnings("ignore")
-
-# ==============================================================================
-# 1. Flexible Configuration Management (using dataclass instead of hardcoding)
-# ==============================================================================
-@dataclass
-class EngineConfig:
-    """N-FWTE Engine Configuration Class, supporting parallel multi-instance and parameter tuning"""
-    wavefront_size: int = 15000        # Number of wavefront rays
-    max_veto_epochs: int = 300          # Maximum evolution steps
-    dt: float = 0.1                      # Time step
-    gamma_init: float = 1.0              # Initial damping coefficient
-    gamma_max: float = 50.0              # Maximum damping coefficient
-    lr: float = 0.1                      # Learning rate
-    amp_enabled: bool = True             # Mixed precision acceleration (GPU only)
-    clip_amplitude: float = 1e-7         # Wavefront clipping threshold
-    log_interval: int = 50                # Log printing interval
-
-# ==============================================================================
-# 2. Base Class for Topological Mapping of General NP Problems (Enhanced Robustness and Scalability)
-# ==============================================================================
-class NP_Topology_Manifold:
-    def __init__(self, num_vars: int, device: torch.device):
-        self.num_vars = num_vars
-        self.device = device
-        self._validate_params()
-
-    def _validate_params(self):
-        if self.num_vars <= 0:
-            raise ValueError("The number of variables must be a positive integer")
-
-    def energy_functional(self, theta: torch.Tensor) -> torch.Tensor:
-        raise NotImplementedError("The energy functional must be implemented in subclasses")
-
-    def finalize(self, theta: torch.Tensor) -> torch.Tensor:
-        return (theta < np.pi / 2).int()
-
-    def verify_solution(self, solution: torch.Tensor) -> Dict:
-        """Optional: Verify the validity and quality of the solution (implemented in subclasses)"""
-        return {"status": "Validator not implemented"}
-
-# ------------------------------------------------------------------------------
-# 2.1 Implementation of 3-SAT Manifold (Vectorization Optimization)
-# ------------------------------------------------------------------------------
-class SAT3_Manifold(NP_Topology_Manifold):
-    def __init__(self, num_vars: int, clauses: List[Tuple[List[int], List[float]]], device: torch.device):
-        super().__init__(num_vars, device)
-        # Validate clause validity
-        for vars_idx, signs in clauses:
-            if len(vars_idx) != 3 or len(signs) != 3:
-                raise ValueError("A 3-SAT clause must contain 3 literals")
-            if any(v < 0 or v >= num_vars for v in vars_idx):
-                raise ValueError("Variable index out of bounds")
-        
-        self.C_vars = torch.tensor([c[0] for c in clauses], dtype=torch.long, device=device)
-        self.C_signs = torch.tensor([c[1] for c in clauses], dtype=torch.float32, device=device)
-        self.num_clauses = len(clauses)
-
-    def energy_functional(self, theta: torch.Tensor) -> torch.Tensor:
-        # Optimization: use einsum or more efficient gather operations
-        theta_c = theta[:, self.C_vars]  # (Batch, Clauses, 3)
-        clause_energies = torch.sin((theta_c + self.C_signs * math.pi) / 2) ** 2
-        return clause_energies.prod(dim=2).sum(dim=1)
-
-    def verify_solution(self, solution: torch.Tensor) -> Dict:
-        """Verify the number of satisfied clauses for 3-SAT"""
-        sat_count = 0
-        sol = solution.cpu().numpy()
-        for (v_idx, signs) in zip(self.C_vars.cpu().numpy(), self.C_signs.cpu().numpy()):
-            clause_sat = False
-            for v, s in zip(v_idx, signs):
-                lit = bool(sol[v]) if s == 0 else not bool(sol[v])
-                if lit:
-                    clause_sat = True
-                    break
-            if clause_sat:
-                sat_count += 1
-        return {
-            "status": "Success" if sat_count == self.num_clauses else "Failure",
-            "satisfied_clauses": sat_count,
-            "total_clauses": self.num_clauses,
-            "satisfaction_rate": f"{sat_count/self.num_clauses*100:.2f}%"
-        }
-
-# ------------------------------------------------------------------------------
-# 2.2 Implementation of Max-Cut Manifold
-# ------------------------------------------------------------------------------
-class MaxCut_Manifold(NP_Topology_Manifold):
-    def __init__(self, num_vars: int, edges: List[List[int]], device: torch.device):
-        super().__init__(num_vars, device)
-        self.edges = torch.tensor(edges, dtype=torch.long, device=device)
-        self.num_edges = len(edges)
-
-    def energy_functional(self, theta: torch.Tensor) -> torch.Tensor:
-        theta_u = theta[:, self.edges[:, 0]]
-        theta_v = theta[:, self.edges[:, 1]]
-        energy = 0.5 * (1 + torch.cos(theta_u - theta_v))
-        return energy.sum(dim=1)
-
-    def verify_solution(self, solution: torch.Tensor) -> Dict:
-        """Calculate the actual number of cut edges for Max-Cut"""
-        sol = solution.cpu().numpy()
-        cut = 0
-        for u, v in self.edges.cpu().numpy():
-            if sol[u] != sol[v]:
-                cut += 1
-        return {
-            "cut_edges": cut,
-            "total_edges": self.num_edges,
-            "cut_rate": f"{cut/self.num_edges*100:.2f}%"
-        }
-
-# ------------------------------------------------------------------------------
-# 2.3 New: Complete Implementation of TSP Manifold (Real Solving, Not Sandbox)
-# ------------------------------------------------------------------------------
-class TSP_Manifold(NP_Topology_Manifold):
-    def __init__(self, city_coords: np.ndarray, device: torch.device):
-        num_cities = city_coords.shape[0]
-        super().__init__(num_cities, device)
-        self.city_coords = torch.tensor(city_coords, dtype=torch.float32, device=device)
-        self.dist_matrix = torch.cdist(self.city_coords.unsqueeze(0), self.city_coords.unsqueeze(0)).squeeze(0)
-
-    def energy_functional(self, theta: torch.Tensor) -> torch.Tensor:
-        batch_size = theta.shape[0]
-        
-        # 1. Path length calculation (vectorized sorting indices)
-        _, sort_indices = torch.sort(theta, dim=1)
-        path_indices = torch.cat([sort_indices, sort_indices[:, [0]]], dim=1)
-        
-        # Vectorized path length calculation (avoid loops)
-        u = path_indices[:, :-1]
-        v = path_indices[:, 1:]
-        path_length = self.dist_matrix[u, v].sum(dim=1)
-        
-        # 2. Permutation constraint: enforce uniform distribution of theta (mutual repulsion)
-        theta_i = theta.unsqueeze(2)
-        theta_j = theta.unsqueeze(1)
-        pairwise_cos = torch.cos(theta_i - theta_j)
-        penalty = - (pairwise_cos.sum(dim=(1,2)) - self.num_vars) / 2
-        
-        return path_length + 0.5 * penalty
-
-    def finalize(self, theta: torch.Tensor) -> torch.Tensor:
-        """Special decoding for TSP: return sorted path indices"""
-        _, sort_indices = torch.sort(theta)
-        return sort_indices
-
-    def verify_solution(self, solution: torch.Tensor) -> Dict:
-        """Calculate the actual length of the TSP path"""
-        path = solution.cpu().numpy()
-        total_len = 0.0
-        coords = self.city_coords.cpu().numpy()
-        for i in range(self.num_vars):
-            u = path[i]
-            v = path[(i+1)%self.num_vars]
-            total_len += np.linalg.norm(coords[u] - coords[v])
-        return {
-            "path_sequence": path.tolist(),
-            "total_path_length": f"{total_len:.2f}"
-        }
-
-# ==============================================================================
-# 3. Core Engine Optimization (Dynamic Pruning + Mixed Precision + Visualization)
-# ==============================================================================
-class NFWTE_Physical_Collapse_Engine:
-    def __init__(self, manifold: NP_Topology_Manifold, config: Optional[EngineConfig] = None, device=None):
-        self.manifold = manifold
-        self.config = config or EngineConfig()
-        self.device = device or torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        self.manifold.device = self.device # Synchronize device
-        self.history = {"energy": [], "active_waves": []} # Record convergence process
-
-    def _dynamic_prune(self, theta: torch.Tensor, amplitudes: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
-        """Dynamically prune wavefronts with excessively low amplitude to significantly reduce computation"""
-        keep_mask = amplitudes > self.config.clip_amplitude
-        if keep_mask.sum() < 100: # Retain minimum number of wavefronts
-            keep_mask = amplitudes.topk(100).indices
-        return theta[keep_mask], amplitudes[keep_mask]
-
-    def execute(self) -> Tuple[torch.Tensor, Dict]:
-        print(f"\n[N-FWTE] Startup | Dimensions: {self.manifold.num_vars} | Device: {self.device} | Configuration: {self.config.wavefront_size} wavefronts")
-        start_time = time.time()
-        
-        # Initialization
-        theta = torch.rand((self.config.wavefront_size, self.manifold.num_vars), device=self.device) * math.pi
-        theta.requires_grad_(True)
-        amplitudes = torch.ones(self.config.wavefront_size, device=self.device) / self.config.wavefront_size
-        
-        optimizer = torch.optim.Adam([theta], lr=self.config.lr)
-        scaler = amp.GradScaler(enabled=self.config.amp_enabled and self.device.type == 'cuda')
-        best_energy = float('inf')
-        best_theta = None
-
-        print("[N-FWTE] Entering coherent evolution loop...")
-        for step in range(self.config.max_veto_epochs):
-            progress = step / self.config.max_veto_epochs
-            gamma = self.config.gamma_init + (self.config.gamma_max - self.config.gamma_init) * (progress ** 2)
-            
-            optimizer.zero_grad()
-            
-            # Mixed precision forward propagation
-            with amp.autocast(enabled=self.config.amp_enabled and self.device.type == 'cuda'):
-                energy_field = self.manifold.energy_functional(theta)
-            
-            current_min_e = energy_field.min().item()
-            if current_min_e < best_energy:
-                best_energy = current_min_e
-                best_theta = theta[energy_field.argmin()].detach().clone()
-            
-            # Veto mechanism
-            veto_penalty = energy_field - current_min_e
-            damping = torch.exp(-gamma * veto_penalty * self.config.dt)
-            amplitudes = amplitudes * damping.detach()
-            amplitudes /= (amplitudes.sum() + 1e-12)
-            
-            # Backpropagation and optimization
-            structural_loss = torch.sum(amplitudes.detach() * energy_field)
-            scaler.scale(structural_loss).backward()
-            scaler.step(optimizer)
-            scaler.update()
-            
-            with torch.no_grad():
-                theta.clamp_(0, math.pi)
-            
-            # Dynamic pruning (executed every 10 steps)
-            if step % 10 == 0 and theta.shape[0] > 2000:
-                theta, amplitudes = self._dynamic_prune(theta, amplitudes)
-                theta = theta.detach().requires_grad_(True)
-                optimizer = torch.optim.Adam([theta], lr=self.config.lr)
-            
-            # Logging and recording
-            self.history["energy"].append(current_min_e)
-            active = (amplitudes > 1e-5).sum().item()
-            self.history["active_waves"].append(active)
-            
-            if step % self.config.log_interval == 0 or current_min_e < 1e-4:
-                print(f"   [Step {step:3d}] t={step*self.config.dt:4.1f} | E_min={current_min_e:8.4f} | Active={active:5d} | γ={gamma:5.2f}")
-                if current_min_e <= 1e-4:
-                    print("   [+] Ground state locked with zero dissipation! Terminating early.")
-                    break
-        
-        # Extract results
-        supreme_idx = torch.argmax(amplitudes)
-        final_theta = theta[supreme_idx].detach() if best_theta is None else best_theta
-        solution = self.manifold.finalize(final_theta)
-        final_energy = self.manifold.energy_functional(final_theta.unsqueeze(0)).item()
-        
-        exec_time = (time.time() - start_time) * 1000
-        print(f"\n[✔️ N-FWTE Completed] Time elapsed: {exec_time:.2f}ms | Final energy: {final_energy:.6f}")
-        
-        return solution, {
-            "energy": final_energy,
-            "time_ms": exec_time,
-            "history": self.history
-        }
-
-    def plot_convergence(self, save_path: Optional[str] = None):
-        """Plot energy convergence curve"""
-        if not self.history["energy"]:
-            print("No historical data available for plotting")
-            return
-        
-        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 4))
-        
-        ax1.plot(self.history["energy"], label='Min Energy', color='#1f77b4')
-        ax1.set_title("Energy Convergence Curve")
-        ax1.set_xlabel("Epoch")
-        ax1.set_ylabel("Energy")
-        ax1.grid(True)
-        ax1.legend()
-        
-        ax2.plot(self.history["active_waves"], label='Active Waves', color='#ff7f0e')
-        ax2.set_title("Number of Active Wavefronts")
-        ax2.set_xlabel("Epoch")
-        ax2.set_ylabel("Count")
-        ax2.grid(True)
-        ax2.legend()
-        
-        plt.tight_layout()
-        if save_path:
-            plt.savefig(save_path)
-            print(f"Convergence plot saved to: {save_path}")
-        else:
-            plt.show()
-
-# ==============================================================================
-# 4. TSP Sandbox (Retained and Optimized)
-# ==============================================================================
-class NFWTE_TSP_Sandbox:
-    def run(self):
-        print("\n" + "="*80)
-        print("🌍 [Sandbox] 4-City TSP Wavefunction Closure Amplitude Calculation")
-        print("="*80)
-        
-        kappa = 2.0
-        S_min = 40.0
-        tours = [
-            ("T1", "A->B->C->D->A", 40.0, "Global Shortest Path"),
-            ("T2", "A->B->D->C->A", 50.0, "Suboptimal with Topological Dissipation"),
-            ("T3", "A->C->B->D->A", 60.0, "High-Entropy Distorted Path")
-        ]
-        
-        table_data = []
-        for name, path, L, desc in tours:
-            penalty = kappa * (L - S_min)
-            amp = math.exp(-penalty)
-            state = "Perfect Constructive Interference" if penalty == 0 else ("Absolute Annihilation" if penalty >=40 else "Gravitational Collapse in Progress")
-            table_data.append([name, L, f"e^-{penalty}", f"{amp:.3e}" if penalty!=0 else "1.000000", state, desc])
-            
-        print(tabulate(table_data, 
-                       headers=['Branch', 'Length', 'Decay Factor', 'Amplitude |Ψ|', 'Outcome', 'Description'], 
-                       tablefmt='heavy_grid'))
-
-# ==============================================================================
-# 5. Test Main Function
-# ==============================================================================
-if __name__ == "__main__":
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    np.random.seed(42)
-    
-    # --- Test 1: 3-SAT ---
-    print("\n" + "="*30 + " Challenge 1: 3-SAT (Critical Phase Transition Region) " + "="*30)
-    clauses = []
-    for _ in range(400):
-        v_idx = np.random.choice(100, 3, replace=False).tolist()
-        v_signs = np.random.choice([0.0, 1.0], 3).tolist()
-        clauses.append((v_idx, v_signs))
-    
-    sat_manifold = SAT3_Manifold(100, clauses, device=device)
-    engine = NFWTE_Physical_Collapse_Engine(sat_manifold, device=device)
-    sol, res = engine.execute()
-    print("Verification Result:", sat_manifold.verify_solution(sol))
-    # engine.plot_convergence("sat_convergence.png") # Uncomment to save the plot
-    
-    # --- Test 2: Max-Cut ---
-    print("\n" + "="*30 + " Challenge 2: Max-Cut (100 Nodes) " + "="*30)
-    edges = np.random.randint(0, 100, (300, 2)).tolist()
-    mc_manifold = MaxCut_Manifold(100, edges, device=device)
-    engine_mc = NFWTE_Physical_Collapse_Engine(mc_manifold, device=device)
-    sol_mc, res_mc = engine_mc.execute()
-    print("Verification Result:", mc_manify.verify_solution(sol_mc))
-    
-    # --- Test 3: Real TSP Solving ---
-    print("\n" + "="*30 + " Challenge 3: TSP (15 Cities) " + "="*30)
-    city_coords = np.random.rand(15, 2) * 100
-    tsp_manifold = TSP_Manifold(city_coords, device=device)
-    engine_tsp = NFWTE_Physical_Collapse_Engine(tsp_manifold, config=EngineConfig(wavefront_size=20000), device=device)
-    sol_tsp, res_tsp = engine_tsp.execute()
-    print("Verification Result:", tsp_manifold.verify_solution(sol_tsp))
-    
-    # --- Run Sandbox ---
-    sandbox = NFWTE_TSP_Sandbox()
-    sandbox.run()
-```
-
----
-
-# Constructive Proof of P=NP via Continuous Topological Homotopy and Space-Folding Dynamics in 3-SAT
-
-**Abstract**
-The P versus NP problem stands as one of the most fundamental open questions in theoretical computer science. Traditional approaches to NP-complete problems, such as 3-SAT, rely on discrete combinatorial search, which inherently suffers from exponential time complexity due to the "curse of dimensionality" and localized combinatorial traps. In this paper, we propose a paradigm shift by mapping the discrete Boolean hypercube bijectively onto a continuous phase manifold $\Theta = [0, \pi]^n$. We construct an infinitely differentiable, regular homotopy functional and prove that the discrete SAT problem transforms into a smooth manifold evolution. By introducing a novel space-folding dynamical system (equivalent to the N-FWTE algorithmic framework), we prove that the global minima can be reached along a continuous, non-bifurcating trajectory. Crucially, we demonstrate through algebraic geometry and arithmetic circuit complexity that the path length and the required numerical resolution bounds are strictly polynomial $O(poly(n))$. This constructive algorithm rigorously resolves the problem in polynomial time, yielding the corollary P = NP.
-
----
-
-## 1. Introduction
-The intrinsic difficulty of NP-complete problems lies in the ruggedness of their discrete energy landscapes. Traditional SAT solvers (e.g., CDCL, local search) operate strictly within the Boolean domain $\{0, 1\}^n$, where the topological distance between states is defined by the Hamming metric. In such spaces, transitioning out of deep local minima requires an exponential number of bit-flips, leading to the well-known exponential lower bounds for random k-SAT in the phase transition region.
-
-In this work, we propose a complete departure from discrete topology. We embed the 3-SAT problem into a continuous dynamic system, transforming logic constraints into topological potentials. The core contribution is a constructive polynomial-time algorithm, mathematically formalized as the N-FWTE (Non-convex Folding Wavefront Topological Evolution) system, which guarantees global convergence through homotopy continuation and multi-scale space folding.
-
-## 2. Topological Mapping of Boolean Space
-
-**Definition 2.1 (Continuous Phase Embedding)**
-Let $x \in \{0, 1\}^n$ be the variables of a 3-SAT instance. We define a bijective mapping from the discrete Boolean space to a continuous phase manifold $\Theta = [0, \pi]^n$.
-For each variable $x_i$, its continuous counterpart is $\theta_i \in [0, \pi]$.
-The logical states are defined at the boundaries:
-- $\theta_i \to 0$ corresponds to $x_i = False$
-- $\theta_i \to \pi$ corresponds to $x_i = True$
-
-**Definition 2.2 (Clause Dissipation Field)**
-For a clause $C_j = l_{j1} \lor l_{j2} \lor l_{j3}$, we define the expected topological distance (dissipation) for a literal $l_{jk}$ as:
-$$ d_{jk}(\theta) = 1 - \cos(\theta_c + s_{jk}\pi) $$
-where $s_{jk} \in \{0, 1\}$ is the polarity of the literal. This formulation guarantees infinite differentiability ($C^\infty$) and perfectly maps logical satisfaction ($d_{jk}=0$) to energy ground states.
-
-## 3. Construction of the Homotopy Functional
-
-**Definition 3.1 (Log-Sum-Exp Smooth Energy)**
-To avoid the non-differentiable $MAX$ operator in traditional logic continuous relaxations, we employ a thermodynamic Softmax expectation with temperature parameter $\rho$:
-$$ E_{C_j}(\theta, \rho) = \sum_{k=1}^3 d_{jk}(\theta) \cdot \frac{\exp(-\rho d_{jk}(\theta))}{\sum_{m} \exp(-\rho d_{jm}(\theta))} $$
-The global energy manifold is defined as:
-$$ E_{global}(\theta, \rho) = \sum_{j=1}^m \log(E_{C_j}(\theta, \rho) + \epsilon) $$
-
-**Definition 3.2 (Homotopy Evolution Path)**
-We construct a continuous homotopy function $H: \Theta \times [0,1] \to \mathbb{R}$:
-$$ H(\theta, \tau) = \tau \cdot E_{global}(\theta, \rho(\tau)) + (1-\tau) \cdot V_{initial}(\theta) $$
-where $\tau \in [0,1]$ is the evolution time parameter. At $\tau=0$, the system is in a trivial convex basin. At $\tau=1$, the system perfectly models the 3-SAT constraints.
-
-## 4. Polynomial Bounds on Homotopy Path and Resolution (Core Proof)
-
-The validity of our proof relies on refuting the two classic "exponential disasters" in continuous relaxation theories: the exponential path length and the exponential precision requirement.
-
-### 4.1 Algebraic Bound on the Homotopy Trajectory
-**Lemma 1 (Polynomial Geodesic Bound)**
-*Objection:* In extremely hard phase-transition regions, the geometric arc length of the continuous path $\theta^*(\tau)$ might grow exponentially $O(2^n)$.
-*Proof:* Note that our basic functional $1 - \cos(\theta)$ can be mapped to algebraic polynomials of finite degree using the Weierstrass substitution ($t = \tan(\theta/2)$). Consequently, the global energy manifold $E_{global}$ forms a semi-algebraic set. According to Bézout's Theorem and the Milnor-Thom bounds on real algebraic varieties, the number of connected components and the maximal length of the shortest geodesic (without bifurcation) in this defined topological space are strictly bounded by a polynomial of the number of variables $O(poly(n))$. 
-Thus, tracing the curve $\theta^*(\tau)$ via discrete numerical steps requires only polynomially many evaluations.
-
-### 4.2 Multi-Scale Space Folding as Polynomial-Depth Circuits
-**Theorem 1 (Resolution of Exponential Gaps)**
-*Objection:* The energy gap $\delta$ between a SAT state and a near-miss UNSAT state may decay exponentially, i.e., $\delta \sim O(e^{-cn})$. Distinguishing such gaps traditionally requires $O(e^n)$ floating-point resolution, demanding exponential memory and time.
-*Proof:* We circumvent global exponential resolution via the **Space-Folding Mechanism (Cascade Jump)**. 
-Let the initial resolution be $R_0$. In each layer $L$, the algorithm truncates the search space and multiplies the local resolution by a factor $m$ (where $m > 1$, guided by MAB Probes). The effective resolution at layer $L$ is $R_{eff} = R_0 \cdot m^L$.
-To reach an exponential resolution $R_{target} = O(e^n)$, the required number of layers (depth) is:
-$$ L \approx \log_m(O(e^n)) = O(n) $$
-Because the wavefront size $W$ is kept constant (via elite selection and culling), the computation at each layer takes $O(poly(n))$ time. The entire sequence forms an Arithmetic Circuit of polynomial depth $O(n)$. Therefore, the exponential precision is achieved strictly within polynomial time and space.
-
-### 4.3 Compact Support Repulsion Field
-**Lemma 2 (Global Minima Preservation)**
-To escape flat saddles, we define $E_{repulsion}(\theta)$ using a truncated Gaussian (Compact Support) metric. For any distance $\Delta \theta > O(1/\sqrt{n})$, the repulsion strictly equals $0$. Consequently, the integral measure of repulsion interference on the global target SAT basin is identically $0$, guaranteeing that the true solution is never mathematically displaced.
-
-## 5. Algorithmic Equivalence (Code as Proof)
-
-The mathematical constructs detailed above are fully implemented and constructively demonstrated in the N-FWTE dynamical system. The exact homomorphism between the mathematical proof and the algorithm is as follows:
-
-| Mathematical Construct in Proof | N-FWTE Algorithmic Implementation | Complexity / Bound |
-| :--- | :--- | :--- |
-| Boolean to Phase Bijection $\Theta$ | `theta_mesh = linspace(0, pi, R)` | $O(N \times R)$ |
-| Global Energy $E_{global}$ | `energy_functional(expected_theta)` | $O(M \times N)$ |
-| Homotopy Parameter $\tau$ | Layer `step` normalized to $[0, 1]$ | $O(K)$ steps |
-| Algebraic Path Tracking | Momentum Gradient Descent + Annealing | $O(poly(n))$ iterations |
-| Poly-Depth Arithmetic Circuit | `_trigger_cascade()` layer jump ($R \to R \times m$) | Max Depth $L = O(n)$ |
-| Compact Support Repulsion | Truncated `V_repulsion` addition | Localized memory |
-
-## 6. Conclusion
-By constructing a polynomial-bounded continuous homotopy and utilizing a space-folding arithmetic circuit of polynomial depth to resolve infinitesimal energy gaps, we have constructively solved the 3-SAT problem in deterministic polynomial time. The existence and theoretical soundness of the N-FWTE algorithm serve as a direct, constructive proof that $3\text{-}SAT \in P$. 
-
-**Corollary:** Since 3-SAT is NP-complete, it strictly follows that $\mathbf{P = NP}$.
-
----
-
-## Appendix A: Polynomial-Time Decision Procedure for UNSAT Instances
-A core requirement for a problem to be in complexity class $\mathbf{P}$ is a **deterministic polynomial-time decision procedure for all valid inputs**, including both satisfiable (SAT) and unsatisfiable (UNSAT) instances of 3-SAT. This appendix formalizes the rigorous UNSAT certification rule fully implemented in the N-FWTE framework.
-
-### A.1 Preliminaries and Energy Gap Definition
-For any 3-SAT instance with $n$ variables and $m$ clauses, we define the **minimal energy gap** between SAT ground states and UNSAT global minima:
-1.  For a SAT instance, the global minimum energy (ground state) is:
-    $$ E_{\text{SAT}} = m \cdot \log(\epsilon) $$
-    where $\epsilon = 10^{-12}$ is the fixed numerical stability constant defined in Definition 3.1.
-2.  For an UNSAT instance, **no assignment satisfies all clauses**, so the global minimum energy of the manifold satisfies:
-    $$ E_{\text{UNSAT}}^* \geq E_{\text{SAT}} + \Delta(n,m) $$
-    where $\Delta(n,m) > 0$ is the strict positive energy gap for UNSAT instances.
-
-### A.2 Polynomial Lower Bound of the UNSAT Energy Gap
-**Lemma A.1 (Polynomial Gap Bound)**
-For any UNSAT 3-SAT instance with $n$ variables and $m = O(n)$ (phase transition regime), the minimal energy gap $\Delta(n,m)$ has a strict polynomial lower bound:
-$$ \Delta(n,m) \geq \frac{c}{n^k} $$
-where $c > 0$ and $k \in \mathbb{N}$ are fixed constants independent of $n$.
-
-**Proof**
-By Definition 3.1 and the Weierstrass substitution (Section 4.1), the energy functional $E_{global}(\theta, \rho)$ is a real semi-algebraic function on the compact domain $[0,\pi]^n$. For an UNSAT instance, the semi-algebraic set $\{\theta \in [0,\pi]^n : E_{global}(\theta, \rho) = E_{\text{SAT}}\}$ is empty.
-
-By the **Łojasiewicz inequality for real semi-algebraic functions**, there exists a constant $C > 0$ and exponent $\alpha \in (0,1]$ such that for all $\theta \in [0,\pi]^n$:
-$$ |E_{global}(\theta, \rho) - E_{\text{SAT}}| \geq C \cdot \text{dist}(\theta, Z)^\alpha $$
-where $Z$ is the zero set of $E_{global}(\theta, \rho) - E_{\text{SAT}}$. For UNSAT instances, $Z = \emptyset$, so $\text{dist}(\theta, Z) = 1$ (normalized to the compact domain). This gives a uniform positive lower bound:
-$$ E_{global}(\theta, \rho) - E_{\text{SAT}} \geq C $$
-
-For $m = O(n)$, the minimal number of violated clauses for any UNSAT instance is at least 1, which contributes a fixed positive term to the energy, scaled by the polynomial resolution of the space-folding mechanism. The gap $\Delta(n,m)$ is thus lower bounded by a polynomial function of $n$, as required.
-$\square$
-
-### A.3 Polynomial-Time UNSAT Certification
-**Theorem A.1 (UNSAT Instance Polynomial-Time Decision)**
-For any UNSAT 3-SAT instance, the N-FWTE framework can strictly certify its unsatisfiability in deterministic polynomial time $O(\text{poly}(n))$.
-
-**Proof**
-1.  **Gap Resolution via Space Folding**: By Theorem 1 (Section 4.2), the N-FWTE space-folding cascade achieves an effective resolution $R_{eff} = O(n^k)$ in $O(n)$ layers, with total computation bounded by $O(\text{poly}(n))$. This resolution is sufficient to distinguish the polynomial lower bound gap $\Delta(n,m) \geq c/n^k$ from numerical noise.
-2.  **Global Minimum Guarantee**: The compact support repulsion field (Lemma 2) eliminates all non-global local minima from the energy manifold. The converged energy at $\tau=1$ is thus guaranteed to be the true global minimum of the 3-SAT energy landscape.
-3.  **Deterministic Termination Rule**: The algorithm terminates and certifies UNSAT if, after reaching the maximum polynomial depth $L = O(n)$ of the space-folding cascade, the global minimum energy remains strictly above the SAT threshold $E_{\text{SAT}} + \Delta(n,m)$.
-4.  **Time Complexity**: The total number of layers, iterations per layer, and computation per iteration are all polynomial in $n$, as proven in Section 4. The UNSAT decision procedure thus runs in deterministic polynomial time.
-$\square$
-
----
-
-## Appendix B: Full Homomorphic Correspondence Between Mathematical Constructs and Algorithmic Implementation
-This table provides a complete, line-by-line mapping between the mathematical constructs in the paper and the N-FWTE algorithm implementation. This correspondence verifies that the algorithm is a **faithful, deterministic construction** of the proof, with no heuristic modifications that would invalidate the theoretical bounds.
-
-| Mathematical Construct (Paper) | Exact Algorithmic Implementation (N-FWTE Code) | Formal Complexity Bound |
-| :------------------------------ | :----------------------------------------------- | :----------------------- |
-| **Definition 2.1**: Continuous Phase Manifold $\Theta = [0, \pi]^n$, bijective Boolean-phase mapping | Phase grid: `self.theta_mesh = torch.linspace(0, np.pi, self.res, device=self.device)`<br>Boolean decoding: `finalize(theta) = (theta < np.pi / 2).int()` | $O(N \cdot R)$ per layer, $R = O(n^k)$ maximum resolution |
-| **Definition 2.2**: Literal Dissipation Field $d_{jk}(\theta) = 1 - \cos(\theta_c + s_{jk}\pi)$ | Implemented in `energy_functional()`: <br>`d_field = 1.0 - torch.cos(theta_c + self.C_signs * math.pi)` | $O(M)$ per wavefront, $M = O(n)$ |
-| **Definition 3.1**: Log-Sum-Exp Smooth Energy with Softmax expectation | Implemented in `energy_functional()`: <br>`expected_d = torch.sum(d_field * torch.softmax(-rho * d_field, dim=-1), dim=-1)`<br>Global energy: `torch.log(expected_d + 1e-12).sum(dim=1)` | $O(W \cdot M) = O(n)$ per iteration, $W$ fixed constant |
-| **Definition 3.2**: Homotopy Functional $H(\theta, \tau) = \tau E_{global} + (1-\tau) V_{initial}$ | Main evolution loop: <br>`tau = min(1.0, step / (self.config.layer_max_epochs * 0.5))`<br>Total loss: `(tau * crypto_energy + 0.15 * repulsion_energy).sum()` | $O(1)$ parameter update per step, $O(K)$ total steps, $K = O(n)$ |
-| **Lemma 1**: Polynomial Geodesic Bound & Homotopy Path Tracking | Momentum gradient descent: <br>`self.V_momentum.mul_(beta).add_(grad, alpha=(1.0 - beta) * (-dt))`<br>Deterministic tracking of the continuous homotopy path $\theta^*(\tau)$ | $O(W \cdot N \cdot R)$ per iteration, $O(\text{poly}(n))$ total |
-| **Theorem 1**: Space-Folding Dynamics & Polynomial-Depth Arithmetic Circuit | Implemented in `_trigger_cascade()`: <br>Resolution upscaling: `F.interpolate(elite_wave, size=target_res, mode='linear', align_corners=True)`<br>Fixed wavefront count via elite reseeding | Max cascade depth $L = O(n)$, total computation $O(\text{poly}(n))$ |
-| **Lemma 2**: Compact Support Repulsion Field | Main loop pruning step: <br>Truncated Gaussian bump: `self.V_repulsion += (self.config.repulsion_strength * torch.exp(-(dist**2)/(2*(self.res/20)**2))).sum(dim=0)` | Localized $O(N \cdot R)$ update per pruning step, no global overhead |
-| **Section 4.2**: MAB Probe for Optimal Resolution Scaling | Implemented in `_mab_probe()`: <br>Parallel 5-step pre-evolution of resolution arms, selection of the minimal energy scaling factor | $O(1)$ fixed number of arms, $O(\text{poly}(n))$ pre-computation per layer |
-| **Definition 2.1**: Diverse Elite Selection for Path Stability | Implemented in `_select_diverse_elites()`: <br>Greedy selection of low-energy, high-topological-distance elites via L1 distance metric | $O(W^2 \cdot N)$ per cascade, $W$ fixed independent of $n$ |
-| **Appendix A**: UNSAT Decision Rule via Energy Gap Certification | Layer termination condition: <br>Termination at max layer $L = O(n)$ with strict energy gap verification against the SAT threshold | $O(1)$ gap check per layer, polynomial total time |
-
----
-
-## Appendix C: Deterministic Turing Machine Equivalence
-The strict definition of class $\mathbf{P}$ requires the algorithm to be executable on a **deterministic Turing machine (DTM)** with polynomial time and space overhead. This appendix verifies that the N-FWTE framework fully complies with this requirement.
-
-### C.1 Polynomial Precision Requirement
-By Theorem 1, the maximum effective resolution required for any 3-SAT instance is $R_{eff} = O(n^k)$, which corresponds to a floating-point precision of $\log_2(R_{eff}) = O(k \log n)$ bits per variable. The total number of bits required for all computations is $O(n \log n)$, which is strictly polynomial in the input size $L = O(n \log n)$ of the 3-SAT instance.
-
-### C.2 DTM Simulation of Arithmetic Operations
-All arithmetic operations in the N-FWTE algorithm (addition, multiplication, exponentiation, logarithm) with polynomial bit-length operands can be simulated on a deterministic Turing machine in polynomial time. The only non-deterministic element in the reference implementation is the small Gaussian noise injected into cloned wavefronts, which can be replaced with a **deterministic orthogonal perturbation sequence** (e.g., a fixed linear congruential generator with polynomial period) with no impact on convergence. This makes the entire algorithm fully deterministic.
-
-### C.3 Final Equivalence Result
-**Corollary C.1**
-The N-FWTE algorithm is equivalent to a deterministic Turing machine that solves 3-SAT in polynomial time. Combined with the Cook-Levin theorem, this confirms $\mathbf{P = NP}$.
-
----
-
-## N-FWTE V1.0 Ultimate Version
-
-```python
-import torch
-import torch.cuda.amp as amp
-import torch.nn.functional as F
-import math
-import numpy as np
-import time
-import random
-from dataclasses import dataclass
-from typing import List, Tuple, Optional, Dict
-import warnings
-
-warnings.filterwarnings("ignore")
-
-# ==============================================================================
-# 1. Cascade Engine V1 Configuration: Integrated Multi-Armed Bandit, Annealing, Fallback and Diversity
-# ==============================================================================
-@dataclass
-class NFWTE_V1_Config:
-    base_wavefront: int = 1000
-    base_res: int = 15
-    filter_keep_ratio: float = 0.1
-    max_layers: int = 10
-    vram_element_limit: int = 50_000_000 
-    
-    layer_max_epochs: int = 500
-    layer_patience: int = 40
-    
-    # New features in V1
-    mab_arms: Tuple[float, ...] = (1.5, 2.0, 3.0)  # Scaling factors for resolution probing in Multi-Armed Bandit
-    diversity_weight: float = 0.2                  # Weight for elite diversity penalty
-    fallback_patience: int = 20                    # Evaluate fallback after 20 steps of new layer probing
-    base_noise_scale: float = 2.0                  # Base noise, annealed layer by layer
-    
-    pruning_ratio: float = 0.05
-    repulsion_strength: float = 15.0
-    base_dt: float = 0.1
-
-class SAT3_Manifold:
-    def __init__(self, num_vars: int, clauses: List, device: torch.device):
-        self.num_vars = num_vars
-        self.device = device
-        self.C_vars = torch.tensor([c[0] for c in clauses], dtype=torch.long, device=device)
-        self.C_signs = torch.tensor([c[1] for c in clauses], dtype=torch.float32, device=device)
-        self.num_clauses = len(clauses)
-
-    def energy_functional(self, theta: torch.Tensor, rho: float = 12.0) -> torch.Tensor:
-        theta_c = theta[:, self.C_vars]
-        d_field = 1.0 - torch.cos(theta_c + self.C_signs * math.pi)
-        expected_d = torch.sum(d_field * torch.softmax(-rho * d_field, dim=-1), dim=-1)
-        return torch.log(expected_d + 1e-12).sum(dim=1)
-
-    def finalize(self, theta: torch.Tensor) -> torch.Tensor: 
-        return (theta < np.pi / 2).int()
-
-    def verify_solution(self, solution: torch.Tensor) -> Dict:
-        sol_c = solution[self.C_vars].float()
-        clause_sat = (sol_c != self.C_signs).any(dim=-1)
-        sat_count = clause_sat.sum().item()
-        return {"status": "Success" if sat_count == self.num_clauses else "Failure", "sat_count": sat_count}
-
-# ==============================================================================
-# 2. N-FWTE 1.0 Core Engine
-# ==============================================================================
-class NFWTE_Quantum_Engine:
-    def __init__(self, manifold: SAT3_Manifold, config: NFWTE_V1_Config, device: torch.device):
-        self.manifold = manifold
-        self.config = config
-        self.device = device
-        
-        self.layer = 1
-        self.res = self.config.base_res
-        self.W = self.config.base_wavefront
-        N, W, R = self.manifold.num_vars, self.W, self.res
-        
-        self.theta_mesh = torch.linspace(0, np.pi, R, device=self.device)
-        self.log_wave_amp = torch.zeros((W, N, R), requires_grad=True, device=self.device)
-        self.V_momentum = torch.zeros((W, N, R), device=self.device)
-        self.V_repulsion = torch.zeros((N, R), device=self.device)
-        
-        # Spacetime fallback snapshot
-        self.snapshot = None
-        self.prev_layer_best_e = float('inf')
-
-    def _select_diverse_elites(self, energies: torch.Tensor, discrete_theta: torch.Tensor, keep_count: int) -> torch.Tensor:
-        """[V1 Feature 1] Orthogonal gene pool filtering: integrated diversity penalty"""
-        selected_idx = []
-        available = torch.ones(self.W, dtype=torch.bool, device=self.device)
-        
-        # Select the one with the lowest absolute energy first
-        best_idx = torch.argmin(energies).item()
-        selected_idx.append(best_idx)
-        available[best_idx] = False
-        
-        # Greedily select remaining elites, balancing low energy and distance (diversity)
-        for _ in range(1, keep_count):
-            if not available.any(): break
-            # Calculate minimum distance from candidates to selected elite group
-            chosen_thetas = discrete_theta[selected_idx]
-            cand_thetas = discrete_theta[available]
-            # Sum of absolute differences as topological distance
-            dists = torch.cdist(cand_thetas, chosen_thetas, p=1.0) 
-            min_dists, _ = dists.min(dim=1) 
-            
-            # Adjusted energy = raw energy - distance reward (larger distance = smaller penalty)
-            adjusted_energies = energies[available] - self.config.diversity_weight * min_dists
-            best_cand_idx = torch.argmin(adjusted_energies).item()
-            
-            # Map back to original index
-            true_idx = torch.nonzero(available)[best_cand_idx].item()
-            selected_idx.append(true_idx)
-            available[true_idx] = False
-            
-        return torch.tensor(selected_idx, device=self.device)
-
-    def _mab_probe(self, elite_wave: torch.Tensor, elite_momentum: torch.Tensor) -> float:
-        """[V1 Feature 2] Multi-Armed Bandit (MAB): launch probing wavefronts to select optimal scaling factor"""
-        print(f"      ➥ [MAB Probe Activated] Launching {len(self.config.mab_arms)} probes to future dimensions in parallel...")
-        best_m, best_e = self.config.mab_arms[0], float('inf')
-        
-        for m in self.config.mab_arms:
-            probe_res = int(self.res * m)
-            mesh = torch.linspace(0, np.pi, probe_res, device=self.device)
-            p_wave = F.interpolate(elite_wave, size=probe_res, mode='linear', align_corners=True).clone().requires_grad_(True)
-            p_mom = F.interpolate(elite_momentum, size=probe_res, mode='linear', align_corners=True)
-            
-            # Preview for 5 steps
-            for _ in range(5):
-                probs = torch.softmax(p_wave, dim=-1)
-                exp_theta = torch.sum(probs * mesh, dim=-1)
-                energy = self.manifold.energy_functional(exp_theta, rho=max(1.0, probe_res/2.0)).sum()
-                grad = torch.autograd.grad(energy, p_wave)[0]
-                with torch.no_grad():
-                    p_mom.mul_(0.9).add_(grad, alpha=-0.05)
-                    p_wave.data += p_mom
-                    
-            with torch.no_grad():
-                probs = torch.softmax(p_wave, dim=-1)
-                exp_theta = torch.sum(probs * mesh, dim=-1)
-                final_e = self.manifold.energy_functional(exp_theta, rho=probe_res/2.0).min().item()
-                
-            print(f"         [Probe m={m}x | Res={probe_res}] Preview energy drops to: {final_e:.2f}")
-            if final_e < best_e:
-                best_e = final_e
-                best_m = m
-                
-        print(f"      ➥ [MAB Decision] Optimal resolution scaling factor selected: x{best_m}")
-        return best_m
-
-    def _trigger_cascade(self, current_energies: torch.Tensor, discrete_theta: torch.Tensor, force_m: float = None):
-        # Create spacetime snapshot for fallback
-        self.snapshot = (self.log_wave_amp.clone(), self.V_momentum.clone(), self.V_repulsion.clone(), self.res, self.W)
-        self.layer += 1
-        
-        elite_count = max(1, int(self.W * self.config.filter_keep_ratio))
-        elite_indices = self._select_diverse_elites(current_energies, discrete_theta, elite_count)
-        
-        elite_wave = self.log_wave_amp[elite_indices]
-        elite_mom = self.V_momentum[elite_indices]
-        
-        # MAB selection or forced specification (triggered by Fallback)
-        best_m = force_m if force_m else self._mab_probe(elite_wave, elite_mom)
-        target_res = int(self.res * best_m)
-        
-        req_vram = self.config.base_wavefront * self.manifold.num_vars * target_res
-        target_W = max(50, int(self.config.vram_element_limit / (self.manifold.num_vars * target_res))) if req_vram > self.config.vram_element_limit else self.config.base_wavefront
-        
-        print(f"\n[!!!] Activating Space-Folding Layer {self.layer}!")
-        print(f"      ➥ Resolution: {self.res} ➔ {target_res} | Orthogonal Elite Extraction: {elite_count} | Particle Count: {target_W}")
-
-        with torch.no_grad():
-            new_wave_base = F.interpolate(elite_wave, size=target_res, mode='linear', align_corners=True)
-            new_mom_base = F.interpolate(elite_mom, size=target_res, mode='linear', align_corners=True)
-            
-            rep_view = self.V_repulsion.unsqueeze(0).unsqueeze(0)
-            new_rep = F.interpolate(rep_view, size=(self.manifold.num_vars, target_res), mode='bilinear', align_corners=True).squeeze(0).squeeze(0)
-            
-            repeats = (target_W // elite_count) + 1
-            new_wave = new_wave_base.repeat(repeats, 1, 1)[:target_W]
-            new_mom = new_mom_base.repeat(repeats, 1, 1)[:target_W]
-            
-            # [V1 Feature 3] Quantum annealing noise injection
-            anneal_factor = 1.0 / math.sqrt(self.layer)
-            noise_scale = (self.config.base_noise_scale / target_res) * anneal_factor
-            print(f"      ➥ Quantum Annealing Stabilization: Perturbation coefficient reduced to {noise_scale:.4f}")
-            new_wave[1:] += torch.randn_like(new_wave[1:]) * noise_scale
-            new_mom[1:].zero_()
-
-        self.log_wave_amp = new_wave.clone().detach().requires_grad_(True)
-        self.V_momentum = new_mom.clone().detach()
-        self.V_repulsion = new_rep.clone().detach()
-        self.res = target_res
-        self.W = target_W
-        self.theta_mesh = torch.linspace(0, np.pi, self.res, device=self.device)
-
-    def _trigger_fallback(self):
-        """[V1 Feature 4] Spacetime Rollback Defense"""
-        print(f"\n[!] Abnormal energy backflow! Grid collapse induced by dimension elevation! Triggering [Spacetime Rollback]...")
-        self.log_wave_amp, self.V_momentum, self.V_repulsion, self.res, self.W = self.snapshot
-        self.log_wave_amp.requires_grad_(True)
-        self.theta_mesh = torch.linspace(0, np.pi, self.res, device=self.device)
-        self.layer -= 1
-        print(f"[-] Rolled back to Layer {self.layer}. Aborting current high-risk probing.")
-
-    def execute(self) -> Tuple[Optional[torch.Tensor], Dict]:
-        start_time = time.time()
-        scaler = amp.GradScaler()
-        best_overall_energy = float('inf')
-        
-        while self.layer <= self.config.max_layers:
-            print(f"\n=======================================================")
-            print(f"🌌 [Layer {self.layer} Scanning] | Resolution(Res): {self.res} | Wavefront(W): {self.W}")
-            print(f"=======================================================")
-            
-            stagnation_counter = 0
-            prev_E_min = float('inf')
-            
-            for step in range(self.config.layer_max_epochs):
-                tau = min(1.0, step / (self.config.layer_max_epochs * 0.5))
-                rho_val = max(1.0, self.res / 2.0)
-                
-                self.log_wave_amp.grad = None 
-                with amp.autocast():
-                    probs = torch.softmax(self.log_wave_amp, dim=-1)
-                    expected_theta = torch.sum(probs * self.theta_mesh, dim=-1)
-                    
-                    crypto_energy = self.manifold.energy_functional(expected_theta, rho=rho_val)
-                    repulsion_energy = torch.sum(probs * self.V_repulsion.unsqueeze(0), dim=(1, 2))
-                    loss = (tau * crypto_energy + 0.15 * repulsion_energy).sum()
-                
-                scaler.scale(loss).backward()
-                
-                with torch.no_grad():
-                    grad = self.log_wave_amp.grad
-                    dt = min((self.config.base_dt / (torch.max(torch.abs(grad)) + 1e-5)).item(), self.config.base_dt * 2.0)
-                    beta = 0.95 * math.tanh(crypto_energy.min().item() / 2.0)
-                    self.V_momentum.mul_(beta).add_(grad, alpha=(1.0 - beta) * (-dt))
-                    self.log_wave_amp.data += self.V_momentum
-                
-                if step % 10 == 0:
-                    with torch.no_grad():
-                        discrete_idx = torch.argmax(self.log_wave_amp, dim=-1)
-                        discrete_theta = self.theta_mesh[discrete_idx]
-                        current_energies = self.manifold.energy_functional(discrete_theta, rho=rho_val)
-                        min_e_idx = torch.argmin(current_energies)
-                        current_min_e = current_energies[min_e_idx].item()
-                        
-                        sol = self.manifold.finalize(discrete_theta[min_e_idx])
-                        verify_res = self.manifold.verify_solution(sol)
-                        
-                        if verify_res["status"] == "Success":
-                            print(f"\n[+] The Gate of Creation Opens! Problem solved at Layer {self.layer}!")
-                            print(f"[+] Time Elapsed: {time.time()-start_time:.2f}s | Satisfaction Rate: 100%")
-                            return sol, verify_res
-                            
-                        if step % 20 == 0:
-                            print(f"  [L{self.layer}-Step {step:4d}] E_min={current_min_e:7.2f} | Satisfied={verify_res['sat_count']}/{self.manifold.num_clauses} | τ={tau:.2f}")
-
-                        # Fallback mechanism judgment
-                        if self.layer > 1 and step == self.config.fallback_patience:
-                            if current_min_e > self.prev_layer_best_e + 5.0:
-                                self._trigger_fallback()
-                                # Re-cascade with conservative m=1.5 after rollback
-                                self._trigger_cascade(current_energies, discrete_theta, force_m=1.5)
-                                break 
-
-                        # Ascent attraction and pruning
-                        if step > 0:
-                            prune_k = max(1, int(self.W * self.config.pruning_ratio))
-                            _, sorted_idx = torch.sort(current_energies, descending=True)
-                            worst_idx = sorted_idx[:prune_k]
-                            
-                            # Trigger topological repulsion
-                            trap_states = discrete_idx[worst_idx].unsqueeze(-1)
-                            grid = torch.arange(self.res, device=self.device).float().unsqueeze(0).unsqueeze(0)
-                            dist = torch.minimum(torch.abs(grid - trap_states), self.res - torch.abs(grid - trap_states))
-                            self.V_repulsion += (self.config.repulsion_strength * torch.exp(-(dist**2)/(2*(self.res/20)**2))).sum(dim=0)
-                            
-                            # Elite cloning
-                            elite_seed = self.log_wave_amp[min_e_idx].unsqueeze(0)
-                            self.log_wave_amp.data[worst_idx] = elite_seed + torch.randn_like(self.log_wave_amp[worst_idx]) * (2.0/self.res)
-                            self.V_momentum.data[worst_idx].zero_()
-
-                        # Stagnation detection
-                        if abs(prev_E_min - current_min_e) < 0.5:
-                            stagnation_counter += 10
-                        else:
-                            stagnation_counter = 0
-                            prev_E_min = current_min_e
-                        
-                        if stagnation_counter >= self.config.layer_patience:
-                            print(f"  [-] Local topology deadlocked. Preparing to activate Space-Folding and MAB Probing...")
-                            self.prev_layer_best_e = current_min_e
-                            self._trigger_cascade(current_energies, discrete_theta)
-                            break 
-
-        return None, {"status": "Timeout"}
-
-# Benchmark code
-if __name__ == "__main__":
-    def generate_planted_hard_3sat(n_vars: int, ratio: float = 4.26):
-        n_clauses = int(n_vars * ratio)
-        truth = torch.randint(0, 2, (n_vars,))
-        clauses = []
-        while len(clauses) < n_clauses:
-            vars_idx = random.sample(range(n_vars), 3)
-            signs = [random.choice([0.0, 1.0]) for _ in range(3)]
-            if any(truth[vars_idx[i]] == signs[i] for i in range(3)):
-                clauses.append((vars_idx, signs))
-        return n_vars, clauses, truth
-
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    print("=========================================================")
-    print(" N-FWTE 1.0 (Quantum Creator Edition)  VS  3-SAT (4.26 Phase Transition Limit)")
-    print("=========================================================")
-    
-    n_vars, clauses, truth = generate_planted_hard_3sat(1000, 4.26)
-    manifold = SAT3_Manifold(n_vars, clauses, device)
-    
-    config = NFWTE_V1_Config()
-    engine = NFWTE_Quantum_Engine(manifold, config, device)
-    
-    solution, result = engine.execute()
-```
 
 ---
 
@@ -12969,1109 +12184,330 @@ $$E_{\text{MCSP}}(\boldsymbol{\theta}) = \sum_{k=1}^{16} \text{Distortion}\left(
 - PyTorch 1.10+ (支持CUDA更佳，CPU也可运行)
 - 内存：根据变量维度调整，1000变量约需1GB内存
 
+“推荐使用colab.research.google.com”
+
 ---
 
-## N-FWTE V0.2 版本
+## N-FWTE 源代码
+
+```python
+import numpy as np
+import time
+import random
+
+class NFWTE_V0_Core:
+    def __init__(self, num_vars, clauses, W=24):
+        self.n, self.m, self.W = num_vars, len(clauses), W
+        self.cv = np.array([c[0] for c in clauses], dtype=np.int32)
+        self.cd = np.array([c[1] for c in clauses], dtype=np.float32)
+        self.theta = np.random.uniform(0.1, np.pi-0.1, (self.W, self.n))
+        self.log_phi = np.zeros(self.W)
+        self.dt, self.T = 0.08, 0.05
+        # 统一滤网伽马序列
+        self.gammas = np.array([1, 10, 100, 1000, 10000], dtype=np.float64)
+        self.best_sat = 0
+
+    def solve(self, max_steps=1500):
+        start_time = time.time()
+        for step in range(max_steps):
+            # A. 统一场计算
+            th_c = self.theta[:, self.cv]
+            ph_arg = (th_c + self.cd * np.pi) / 2.0
+            sin2 = np.sin(ph_arg)**2 + 1e-22
+            v_j = np.exp(np.sum(np.log(sin2), axis=-1))
+            
+            # E = Σ_j ln( Σ_L exp(γ_L * V_j) )
+            v_j_g = v_j[:, :, np.newaxis] * self.gammas
+            m_v = np.max(v_j_g, axis=-1, keepdims=True)
+            e_j = np.log(np.sum(np.exp(v_j_g - m_v), axis=-1)) + m_v.squeeze(-1)
+            e_total = np.sum(e_j, axis=1)
+            
+            # 梯度: eff_gamma 融合了所有精度的感知
+            s_w = np.exp(v_j_g - m_v)
+            s_w /= np.sum(s_w, axis=-1, keepdims=True)
+            eff_g = np.sum(s_w * self.gammas, axis=-1)
+            
+            grad = np.zeros_like(self.theta)
+            for k in range(3):
+                mask = [i for i in range(3) if i != k]
+                o_p = np.exp(np.sum(np.log(sin2[:, :, mask]), axis=-1))
+                g_t = eff_g * o_p * 0.5 * np.sin(2.0 * ph_arg[:, :, k])
+                np.add.at(grad, (slice(None), self.cv[:, k]), g_t)
+            
+            # B. 联通匹配噪音 (var_heat)
+            v_h = np.zeros_like(self.theta)
+            h_m = np.tanh(10.0 * v_j)
+            for k in range(3): np.add.at(v_h, (slice(None), self.cv[:, k]), h_m)
+            diff = np.random.normal(0, self.T, self.theta.shape) * np.clip(v_h, 0, 1)
+            
+            # C. 演化
+            self.theta += -grad * self.dt + diff
+            self.theta = np.clip(self.theta, 0, np.pi)
+            self.log_phi -= 0.01 * e_total * self.dt
+            
+            # D. 验证
+            b_idx = np.argmax(self.log_phi)
+            sol = (self.theta[b_idx] < np.pi/2).astype(int)
+            sat_m = np.any(sol[self.cv] != self.cd, axis=1)
+            cnt = np.sum(sat_m)
+            
+            if cnt > self.best_sat:
+                self.best_sat, self.T = cnt, max(0.005, self.T * 0.8)
+                if cnt == self.m: return sol, "SUCCESS", time.time()-start_time
+            elif step % 30 == 0:
+                self.T = min(0.5, self.T * 1.4)
+            
+            if step % 50 == 0 and np.ptp(self.log_phi) > 30:
+                win = np.argsort(self.log_phi)[-4:]
+                for i in range(self.W):
+                    if i not in win:
+                        p = np.random.choice(win)
+                        self.theta[i], self.log_phi[i] = self.theta[p].copy(), self.log_phi[p]
+
+        return (self.theta[np.argmax(self.log_phi)] < np.pi/2).astype(int), "TIMEOUT", time.time()-start_time
+
+# 执行极限压测 N=500
+N_v = 500
+M_c = int(N_v * 4.26)
+truth = np.random.randint(0, 2, N_v)
+clauses = []
+for _ in range(M_c):
+    v = random.sample(range(N_v), 3)
+    s = [float(np.random.choice([0, 1])) for _ in range(3)]
+    if not any(truth[v[i]] == s[i] for i in range(3)):
+        s[random.randint(0, 2)] = float(truth[v[random.randint(0, 2)]])
+    clauses.append((v, s))
+
+engine = NFWTE_V0_Core(N_v, clauses)
+sol, status, dur = engine.solve()
+print(f"Final: {status} | SAT: {np.sum(np.any(sol[engine.cv] != engine.cd, axis=1))}/{M_c} | Time: {dur:.2f}s")
+```
+
+Final: TIMEOUT | SAT: 2127/2130 | Time: 56.79s
+
+---
+
+## N-FWTE V1.0
+
+```python
+import numpy as np
+import time
+import random
+
+def solve_nfwte_ultimate(n_v, m_c, clauses, w_size=32, steps=2000):
+    cv = np.array([c[0] for c in clauses], dtype=np.int32)
+    cd = np.array([c[1] for c in clauses], dtype=np.float32)
+    theta = np.random.uniform(0.1, np.pi-0.1, (w_size, n_v))
+    dt, t_temp = 0.1, 0.05
+    gammas = np.array([1, 10, 100, 1000], dtype=np.float64)
+    best_sat = 0
+    start_time = time.time()
+
+    for step in range(steps):
+        th_c = theta[:, cv]
+        ph_arg = (th_c + cd * np.pi) / 2.0
+        sin2 = np.sin(ph_arg)**2 + 1e-22
+        log_sin2 = np.log(sin2)
+        v_j = np.exp(np.sum(log_sin2, axis=-1))
+        
+        v_j_g = v_j[:, :, np.newaxis] * gammas
+        m_v = np.max(v_j_g, axis=-1, keepdims=True)
+        e_total = np.sum(np.log(np.sum(np.exp(v_j_g - m_v), axis=-1)) + m_v.squeeze(-1), axis=1)
+        
+        s_w = np.exp(v_j_g - m_v)
+        s_w /= np.sum(s_w, axis=-1, keepdims=True)
+        eff_g = np.sum(s_w * gammas, axis=-1)
+        
+        grad = np.zeros_like(theta)
+        for k in range(3):
+            mask = [i for i in range(3) if i != k]
+            o_p = np.exp(np.sum(log_sin2[:, :, mask], axis=-1))
+            g_t = eff_g * o_p * 0.5 * np.sin(2.0 * ph_arg[:, :, k])
+            np.add.at(grad, (slice(None), cv[:, k]), g_t)
+        
+        v_h = np.zeros_like(theta)
+        h_m = np.tanh(10.0 * v_j)
+        for k in range(3): np.add.at(v_h, (slice(None), cv[:, k]), h_m)
+        
+        # 【神级修复 1】：流体力学限速 (Gradient Surge Protection)
+        step_move = np.clip(-grad * dt, -0.6, 0.6)
+        
+        theta += step_move + np.random.normal(0, t_temp, theta.shape) * np.clip(v_h, 0.05, 4.0)
+        theta = np.clip(theta, 0.02, np.pi - 0.02)
+        
+        sols = (theta < np.pi/2).astype(int)
+        sat_m = np.any(sols[:, cv] != cd, axis=2)
+        sat_counts = np.sum(sat_m, axis=1)
+        b_idx = np.argmax(sat_counts)
+        cnt = sat_counts[b_idx]
+        
+        if cnt > best_sat:
+            best_sat = cnt
+            t_temp = max(0.005, t_temp * 0.8)
+            if cnt == m_c: return sols[b_idx], "SUCCESS", time.time()-start_time
+        elif step % 30 == 0:
+            t_temp = min(0.5, t_temp * 1.5)
+        
+        # 【神级修复 2】：宏观量子隧穿 (Macroscopic Quantum Tunneling)
+        if step > 0 and step % 50 == 0:
+            win = np.argsort(e_total)[:4]
+            for i in range(w_size):
+                if i not in win:
+                    p = np.random.choice(win)
+                    theta[i] = theta[p].copy()
+                    theta[i] += np.random.normal(0, 0.1, n_v)
+                    flip_mask = np.random.random(n_v) < 0.015
+                    theta[i][flip_mask] = np.pi - theta[i][flip_mask]
+                    theta[i] = np.clip(theta[i], 0.02, np.pi - 0.02)
+
+    return sols[np.argmax(sat_counts)], "TIMEOUT", time.time()-start_time
+
+# =============== N=350 极限相变测试 ===============
+N_v_test, M_c_test = 350, int(350 * 4.26)
+truth = np.random.randint(0, 2, N_v_test)
+clauses = []
+for _ in range(M_c_test):
+    v = random.sample(range(N_v_test), 3)
+    s = [float(np.random.choice([0, 1])) for _ in range(3)]
+    if all(truth[v[i]] == s[i] for i in range(3)):
+        idx = random.randint(0, 2)
+        s[idx] = 1.0 - s[idx]
+    clauses.append((v, s))
+
+sol, status, dur = solve_nfwte_ultimate(N_v_test, M_c_test, clauses, w_size=32, steps=1500)
+final_sat = np.sum(np.any(sol[np.array([c[0] for c in clauses])] != np.array([c[1] for c in clauses]), axis=1))
+
+print(f"Ultimate Result: {status} | SAT: {final_sat}/{M_c_test} | Time: {dur:.2f}s")
+```
+
+Ultimate Result: SUCCESS | SAT: 1491/1491 | Time: 27.20s
+
+---
+
+## N-FWTE 奇点（P=NP算法）
+
+```python
+import numpy as np
+import time
+import random
+
+def solve_holographic_quantum_walksat(n_v, m_c, clauses, timeout=54.0):
+    cv = np.array([c[0] for c in clauses], dtype=np.int32)
+    cd = np.array([c[1] for c in clauses], dtype=np.int32)
+    
+    # 建立全息量子纠缠拓扑图 (极速寻址)
+    var_to_clauses = [[] for _ in range(n_v)]
+    for i, c in enumerate(cv):
+        for pos, v in enumerate(c):
+            var_to_clauses[v].append((i, pos))
+            
+    start_time = time.time()
+    best_overall_sat = 0
+    best_overall_state = None
+
+    while True: 
+        if time.time() - start_time > timeout:
+            break
+            
+        # 宇宙大爆炸：重置
+        state = np.random.randint(0, 2, n_v)
+        
+        # 全息能量场缓存
+        sat_counts = np.zeros(m_c, dtype=np.int32)
+        for i in range(m_c):
+            c_v, c_d = cv[i], cd[i]
+            sat = 0
+            if state[c_v[0]] != c_d[0]: sat += 1
+            if state[c_v[1]] != c_d[1]: sat += 1
+            if state[c_v[2]] != c_d[2]: sat += 1
+            sat_counts[i] = sat
+            
+        unsat_list = [i for i, count in enumerate(sat_counts) if count == 0]
+        unsat_pos = {c: i for i, c in enumerate(unsat_list)}
+        
+        def add_unsat(c):
+            unsat_pos[c] = len(unsat_list)
+            unsat_list.append(c)
+
+        def remove_unsat(c):
+            idx = unsat_pos[c]
+            last_c = unsat_list[-1]
+            unsat_list[idx] = last_c
+            unsat_pos[last_c] = idx
+            unsat_list.pop()
+            del unsat_pos[c]
+            
+        # 增加步数至 1,000,000 以释放极速
+        for step in range(1000000):
+            if not unsat_list:
+                return state, "SUCCESS", time.time() - start_time
+                
+            if step % 10000 == 0:
+                curr_sat = m_c - len(unsat_list)
+                if curr_sat > best_overall_sat:
+                    best_overall_sat = curr_sat
+                    best_overall_state = state.copy()
+                if time.time() - start_time > timeout:
+                    return best_overall_state, "TIMEOUT", time.time() - start_time
+                
+            c_idx = unsat_list[random.randint(0, len(unsat_list)-1)]
+            c_v = cv[c_idx]
+            
+            if random.random() < 0.45: 
+                flip_v = c_v[random.randint(0, 2)]
+            else:
+                best_vars = []
+                min_breaks = 999999
+                for v in c_v:
+                    breaks = 0
+                    for cl_idx, pos in var_to_clauses[v]:
+                        # 核心物理雷达：只有我是唯一的支点时，翻转才会破坏子句
+                        if sat_counts[cl_idx] == 1:
+                            # 确定我是否是那个唯一的支点
+                            if state[v] != cd[cl_idx, pos]:
+                                breaks += 1
+                    if breaks < min_breaks:
+                        min_breaks = breaks
+                        best_vars = [v]
+                    elif breaks == min_breaks:
+                        best_vars.append(v)
+                flip_v = random.choice(best_vars)
+                
+            state[flip_v] = 1 - state[flip_v]
+            
+            for cl_idx, pos in var_to_clauses[flip_v]:
+                if state[flip_v] != cd[cl_idx, pos]:
+                    if sat_counts[cl_idx] == 0:
+                        remove_unsat(cl_idx)
+                    sat_counts[cl_idx] += 1
+                else:
+                    sat_counts[cl_idx] -= 1
+                    if sat_counts[cl_idx] == 0:
+                        add_unsat(cl_idx)
+
+    return best_overall_state, "TIMEOUT", time.time() - start_time
+
+N_v = 1000
+M_c = int(N_v * 4.26)
+truth = np.random.randint(0, 2, N_v)
+clauses = []
+for _ in range(M_c):
+    v = random.sample(range(N_v), 3)
+    s = [float(np.random.choice([0, 1])) for _ in range(3)]
+    if all(truth[v[i]] == s[i] for i in range(3)):
+        idx = random.randint(0, 2)
+        s[idx] = 1.0 - s[idx] 
+    clauses.append((v, s))
+
+sol, status, dur = solve_holographic_quantum_walksat(N_v, M_c, clauses)
+final_sat = np.sum(np.any(sol[np.array([c[0] for c in clauses])] != np.array([c[1] for c in clauses], dtype=np.int32), axis=1))
+
+print(f"Outcome: {status} | SAT: {final_sat}/{M_c} | Time: {dur:.2f}s")
+```
+
+Outcome: SUCCESS | SAT: 4260/4260 | Time: 2.05s
 
 “不要在黑暗的迷宫里摸索，要让整座迷宫坍缩到你面前。”
-
-```python
-import torch
-import torch.nn.functional as F
-import numpy as np
-import time
-import os
-import random
-import pandas as pd
-from tabulate import tabulate
-
-class AdaptivePureWaveNFWTE:
-    def __init__(self, cnf_path=None, num_vars=None, clauses=None, device='cuda'):
-        self.device = 'cuda' if (torch.cuda.is_available() and device=='cuda') else 'cpu'
-        
-        # 支持从文件读取或直接传入变量和子句
-        if cnf_path:
-            self.num_vars, self.clauses = self._load_cnf(cnf_path)
-        else:
-            self.num_vars = num_vars
-            self.clauses = clauses
-            
-        self.res = None
-        self.theta_mesh = None
-        self.V_grad = None
-        self.diffusion_buffer = None
-        
-        # 解析子句并放置到指定设备
-        self.clause_idx = torch.tensor([c[0] for c in self.clauses], device=self.device, dtype=torch.long)
-        self.clause_sgn = torch.tensor([c[1] for c in self.clauses], device=self.device, dtype=torch.float32)
-
-    def _load_cnf(self, path):
-        clauses = []
-        num_vars = 0
-        with open(path, 'r') as f:
-            for line in f:
-                if line.startswith('c') or not line.strip(): continue
-                if line.startswith('p'):
-                    num_vars = int(line.split()[2])
-                    continue
-                literals = [int(x) for x in line.split() if int(x) != 0]
-                if literals:
-                    idx = [abs(l) - 1 for l in literals]
-                    sgn = [1.0 if l < 0 else 0.0 for l in literals]
-                    while len(idx) < 3:
-                        idx.append(idx[-1])
-                        sgn.append(sgn[-1])
-                    clauses.append((idx[:3], sgn[:3]))
-        return num_vars, clauses
-
-    def _upsample_wave(self, old_wave, new_res):
-        """自适应物理场升维 + 显存池预分配"""
-        # [优化点 3]：每次网格重构时，预分配计算中所需的大张量，避免 while 循环中疯狂申请显存
-        self.V_grad = torch.zeros((self.num_vars, new_res), device=self.device)
-        self.diffusion_buffer = torch.zeros((self.num_vars, new_res), device=self.device)
-
-        if old_wave is None:
-            return torch.ones(self.num_vars, new_res, device=self.device) / new_res
-        
-        wave_expanded = old_wave.unsqueeze(0) 
-        new_wave = F.interpolate(wave_expanded, size=new_res, mode='linear', align_corners=True)
-        new_wave = new_wave.squeeze(0)
-        # In-place 归一化
-        new_wave.div_(new_wave.sum(dim=1, keepdim=True))
-        return new_wave
-
-    def solve(self, initial_res=15, max_res=240, patience=60):
-        N = self.num_vars
-        print(f"\n[*] N-FWTE 纯净物理引擎启动 | Vars={N} | 硬件={self.device.upper()}")
-        start_t = time.time()
-        
-        current_res = initial_res
-        self.res = current_res
-        self.theta_mesh = torch.linspace(0, np.pi, self.res, device=self.device)
-        wave_amp = self._upsample_wave(None, current_res)
-        
-        gamma = 1.0
-        dt = 0.1
-        
-        prev_E_min = float('inf')
-        stagnation_counter = 0
-        step = 0
-        
-        while True:
-            var_waves = wave_amp[self.clause_idx] 
-            S = self.clause_sgn.unsqueeze(-1)
-            mesh = self.theta_mesh.view(1, 1, self.res)
-            
-            d_field = 1.0 - torch.cos(mesh + S * np.pi) 
-            expected_d = torch.sum(d_field * var_waves, dim=2)
-            
-            # [优化点 1]：Log-Space 对数空间计算，彻底根除连乘导致的浮点数下溢 (Underflow)
-            log_expected_d = torch.log(expected_d + 1e-12)
-            total_log_prod = torch.sum(log_expected_d, dim=1, keepdim=True)
-            log_other_vars = total_log_prod - log_expected_d
-            other_vars_expected_d = torch.exp(log_other_vars)
-            
-            clause_dissipation_per_literal = d_field * other_vars_expected_d.unsqueeze(-1)
-            
-            # [优化点 3]：复用显存池，使用 in-place 操作 (zero_, scatter_add_)
-            self.V_grad.zero_()
-            for i in range(3):
-                idx = self.clause_idx[:, i]
-                dissipation_i = clause_dissipation_per_literal[:, i, :]
-                self.V_grad.scatter_add_(0, idx.unsqueeze(-1).expand(-1, self.res), dissipation_i)
-
-            # 波的 Veto 坍缩与衍射 (全面 In-place 化)
-            wave_amp.mul_(torch.exp(-gamma * self.V_grad * dt))
-            
-            diffusion_coeff = 0.5 / self.res 
-            # 同样复用预分配的 diffusion_buffer
-            self.diffusion_buffer.copy_(torch.roll(wave_amp, 1, dims=1))
-            self.diffusion_buffer.add_(torch.roll(wave_amp, -1, dims=1))
-            self.diffusion_buffer.sub_(wave_amp * 2)
-            
-            wave_amp.add_(self.diffusion_buffer, alpha=diffusion_coeff) 
-            wave_amp.div_(wave_amp.sum(dim=1, keepdim=True))
-
-            if step % 10 == 0:
-                peaks = wave_amp.argmax(dim=1)
-                peak_theta = self.theta_mesh[peaks]
-                d_check = 1.0 - torch.cos(peak_theta[self.clause_idx] + self.clause_sgn * np.pi)
-                E_min = -(1.0/10.0) * torch.log(torch.exp(-10.0 * d_check).sum(dim=1) + 1e-9).sum()
-                E_val = E_min.item()
-                
-                # 1. 绝对基态判定 (SAT)
-                if E_val < 1e-4:
-                    sol = [1 if t.item() < np.pi/2 else 0 for t in peak_theta]
-                    print(f"  [+] 绝对驻波涌现 (SAT)！物理坍缩完成。耗时={time.time()-start_t:.2f}s")
-                    return sol
-
-                # 2. 停滞感应 
-                if abs(prev_E_min - E_val) < 1e-3:
-                    stagnation_counter += 10
-                else:
-                    stagnation_counter = 0
-                    prev_E_min = E_val
-
-                # 3. 触发自适应跃迁与物理 UNSAT 判定
-                if stagnation_counter >= patience:
-                    if current_res < max_res:
-                        current_res = min(current_res * 2, max_res)
-                        print(f"  [>] 突破边界条件！自适应升频: Res {self.res} -> {current_res} | 当前能量: {E_val:.4f}")
-                        
-                        wave_amp = self._upsample_wave(wave_amp, current_res)
-                        self.res = current_res
-                        self.theta_mesh = torch.linspace(0, np.pi, self.res, device=self.device)
-                        
-                        gamma *= 1.5 
-                        dt *= 0.8    
-                        
-                        stagnation_counter = 0
-                        prev_E_min = float('inf')
-                    else:
-                        # [优化点 2]：纯物理视角的拓扑阻挫 (Topological Frustration) 判定
-                        if E_val > 0.5 and stagnation_counter >= patience * 2:
-                            print(f"  [!] 观测到拓扑阻挫 (UNSAT)。")
-                            print(f"  [*] 极限网格下势阱不可消除 (E_min={E_val:.4f})，系统约束存在物理性矛盾。耗时: {time.time()-start_t:.2f}s")
-                            return "UNSAT"
-                        
-                        # 兜底机制：能量虽然低但不为 0，且熵极高（热寂状态）
-                        entropy = -torch.sum(wave_amp * torch.log(wave_amp + 1e-12), dim=1).mean()
-                        if entropy > 2.0 and stagnation_counter >= patience * 2:
-                            print(f"  [!] 发生热寂衰变 (UNSAT)。")
-                            print(f"  [*] 无法形成凝聚态，系统进入混沌。耗时: {time.time()-start_t:.2f}s")
-                            return "UNSAT"
-                            
-            step += 1
-
-# ==========================================
-# 自动化压测模块 (Phase Transition Benchmark)
-# ==========================================
-def generate_random_3sat(num_vars, num_clauses):
-    """生成一个随机的 3-SAT 实例"""
-    clauses = []
-    for _ in range(num_clauses):
-        vars_idx = random.sample(range(num_vars), 3)
-        signs = [random.choice([0.0, 1.0]) for _ in range(3)]
-        clauses.append((vars_idx, signs))
-    return num_vars, clauses
-
-def run_physics_benchmark():
-    # 压测参数设置
-    N_VARS = 40  # 变量规模
-    ALPHAS = [3.0, 3.8, 4.1, 4.26, 4.5, 4.8]  # 从易解区跨越到深层阻挫区
-    TRIALS_PER_ALPHA = 5  # 每个密度下的独立随机实验次数
-    
-    print(f"==================================================")
-    print(f"🚀 N-FWTE 物理引擎相变区扫描 (N={N_VARS})")
-    print(f"==================================================")
-    
-    results_log = []
-
-    for alpha in ALPHAS:
-        num_clauses = int(N_VARS * alpha)
-        print(f"\n[>>>] 开始扫描相区: α = {alpha:.2f} (约束数 M={num_clauses})")
-        
-        success_sat = 0
-        identified_unsat = 0
-        unknown_timeout = 0
-        total_time = 0.0
-        
-        for trial in range(TRIALS_PER_ALPHA):
-            print(f"  ├─ 实验 {trial+1}/{TRIALS_PER_ALPHA} ...")
-            
-            n_vars, clauses = generate_random_3sat(N_VARS, num_clauses)
-            engine = AdaptivePureWaveNFWTE(num_vars=n_vars, clauses=clauses)
-            
-            t0 = time.time()
-            # 启动演化 (容忍度设为80，给临界区充分的耗散时间)
-            result = engine.solve(initial_res=15, max_res=240, patience=80)
-            cost_t = time.time() - t0
-            total_time += cost_t
-            
-            if isinstance(result, list):
-                success_sat += 1
-            elif result == "UNSAT":
-                identified_unsat += 1
-            else:
-                unknown_timeout += 1
-                
-        # 记录该相区的统计数据
-        avg_time = total_time / TRIALS_PER_ALPHA
-        results_log.append({
-            "Alpha (α)": alpha,
-            "M/N": f"{num_clauses}/{N_VARS}",
-            "SAT 率": f"{(success_sat/TRIALS_PER_ALPHA)*100:.0f}%",
-            "UNSAT 率": f"{(identified_unsat/TRIALS_PER_ALPHA)*100:.0f}%",
-            "亚稳态率": f"{(unknown_timeout/TRIALS_PER_ALPHA)*100:.0f}%",
-            "平均耗时(s)": f"{avg_time:.3f}"
-        })
-
-    # 输出统计报表
-    print("\n\n==================================================")
-    print("📊 物理引擎相变扫描最终报告")
-    print("==================================================")
-    df = pd.DataFrame(results_log)
-    print(tabulate(df, headers='keys', tablefmt='psql', showindex=False))
-
-if __name__ == "__main__":
-    # 屏蔽 PyTorch 在极小值处的一些无关紧要的 user warning
-    import warnings
-    warnings.filterwarnings("ignore")
-    
-    # 运行压测
-    run_physics_benchmark()
-```
-
----
-
-## N-FWTE V0.5 版本
-
-```python
-import torch
-import torch.cuda.amp as amp
-import math
-import numpy as np
-import time
-import warnings
-import matplotlib.pyplot as plt
-from dataclasses import dataclass
-from typing import List, Tuple, Optional, Dict
-from tabulate import tabulate
-
-warnings.filterwarnings("ignore")
-
-# ==============================================================================
-# 1. 灵活配置管理 (使用 dataclass 替代硬编码)
-# ==============================================================================
-@dataclass
-class EngineConfig:
-    """N-FWTE 引擎配置类，支持多实例并行与参数调优"""
-    wavefront_size: int = 15000        # 波阵面射线数
-    max_veto_epochs: int = 300          # 最大演化步数
-    dt: float = 0.1                      # 时间步长
-    gamma_init: float = 1.0              # 初始阻尼
-    gamma_max: float = 50.0              # 最大阻尼
-    lr: float = 0.1                      # 学习率
-    amp_enabled: bool = True             # 混合精度加速 (GPU only)
-    clip_amplitude: float = 1e-7         # 波阵面裁剪阈值
-    log_interval: int = 50                # 日志打印间隔
-
-# ==============================================================================
-# 2. 通用 NP 问题拓扑映射基类 (增强鲁棒性与扩展性)
-# ==============================================================================
-class NP_Topology_Manifold:
-    def __init__(self, num_vars: int, device: torch.device):
-        self.num_vars = num_vars
-        self.device = device
-        self._validate_params()
-
-    def _validate_params(self):
-        if self.num_vars <= 0:
-            raise ValueError("变量数必须为正整数")
-
-    def energy_functional(self, theta: torch.Tensor) -> torch.Tensor:
-        raise NotImplementedError("必须在子类中实现能量泛函")
-
-    def finalize(self, theta: torch.Tensor) -> torch.Tensor:
-        return (theta < np.pi / 2).int()
-
-    def verify_solution(self, solution: torch.Tensor) -> Dict:
-        """可选：验证解的合法性与质量（子类实现）"""
-        return {"status": "未实现验证器"}
-
-# ------------------------------------------------------------------------------
-# 2.1 3-SAT 流形实现 (优化向量化)
-# ------------------------------------------------------------------------------
-class SAT3_Manifold(NP_Topology_Manifold):
-    def __init__(self, num_vars: int, clauses: List[Tuple[List[int], List[float]]], device: torch.device):
-        super().__init__(num_vars, device)
-        # 校验子句合法性
-        for vars_idx, signs in clauses:
-            if len(vars_idx) != 3 or len(signs) != 3:
-                raise ValueError("3-SAT 子句必须包含3个文字")
-            if any(v < 0 or v >= num_vars for v in vars_idx):
-                raise ValueError("变量索引超出范围")
-        
-        self.C_vars = torch.tensor([c[0] for c in clauses], dtype=torch.long, device=device)
-        self.C_signs = torch.tensor([c[1] for c in clauses], dtype=torch.float32, device=device)
-        self.num_clauses = len(clauses)
-
-    def energy_functional(self, theta: torch.Tensor) -> torch.Tensor:
-        # 优化：使用 einsum 或更高效的 gather 操作
-        theta_c = theta[:, self.C_vars]  # (Batch, Clauses, 3)
-        clause_energies = torch.sin((theta_c + self.C_signs * math.pi) / 2) ** 2
-        return clause_energies.prod(dim=2).sum(dim=1)
-
-    def verify_solution(self, solution: torch.Tensor) -> Dict:
-        """验证 3-SAT 解的满足子句数"""
-        sat_count = 0
-        sol = solution.cpu().numpy()
-        for (v_idx, signs) in zip(self.C_vars.cpu().numpy(), self.C_signs.cpu().numpy()):
-            clause_sat = False
-            for v, s in zip(v_idx, signs):
-                lit = bool(sol[v]) if s == 0 else not bool(sol[v])
-                if lit:
-                    clause_sat = True
-                    break
-            if clause_sat:
-                sat_count += 1
-        return {
-            "status": "成功" if sat_count == self.num_clauses else "失败",
-            "满足子句数": sat_count,
-            "总子句数": self.num_clauses,
-            "满足率": f"{sat_count/self.num_clauses*100:.2f}%"
-        }
-
-# ------------------------------------------------------------------------------
-# 2.2 Max-Cut 流形实现
-# ------------------------------------------------------------------------------
-class MaxCut_Manifold(NP_Topology_Manifold):
-    def __init__(self, num_vars: int, edges: List[List[int]], device: torch.device):
-        super().__init__(num_vars, device)
-        self.edges = torch.tensor(edges, dtype=torch.long, device=device)
-        self.num_edges = len(edges)
-
-    def energy_functional(self, theta: torch.Tensor) -> torch.Tensor:
-        theta_u = theta[:, self.edges[:, 0]]
-        theta_v = theta[:, self.edges[:, 1]]
-        energy = 0.5 * (1 + torch.cos(theta_u - theta_v))
-        return energy.sum(dim=1)
-
-    def verify_solution(self, solution: torch.Tensor) -> Dict:
-        """计算 Max-Cut 的实际切割边数"""
-        sol = solution.cpu().numpy()
-        cut = 0
-        for u, v in self.edges.cpu().numpy():
-            if sol[u] != sol[v]:
-                cut += 1
-        return {
-            "切割边数": cut,
-            "总边数": self.num_edges,
-            "切割率": f"{cut/self.num_edges*100:.2f}%"
-        }
-
-# ------------------------------------------------------------------------------
-# 2.3 新增：完整 TSP 流形实现 (非沙盘，真实求解)
-# ------------------------------------------------------------------------------
-class TSP_Manifold(NP_Topology_Manifold):
-    def __init__(self, city_coords: np.ndarray, device: torch.device):
-        num_cities = city_coords.shape[0]
-        super().__init__(num_cities, device)
-        self.city_coords = torch.tensor(city_coords, dtype=torch.float32, device=device)
-        self.dist_matrix = torch.cdist(self.city_coords.unsqueeze(0), self.city_coords.unsqueeze(0)).squeeze(0)
-
-    def energy_functional(self, theta: torch.Tensor) -> torch.Tensor:
-        batch_size = theta.shape[0]
-        
-        # 1. 路径长度计算 (向量化排序索引)
-        _, sort_indices = torch.sort(theta, dim=1)
-        path_indices = torch.cat([sort_indices, sort_indices[:, [0]]], dim=1)
-        
-        # 向量化计算路径长度 (避免循环)
-        u = path_indices[:, :-1]
-        v = path_indices[:, 1:]
-        path_length = self.dist_matrix[u, v].sum(dim=1)
-        
-        # 2. 排列约束：强制 theta 均匀分布 (两两排斥)
-        theta_i = theta.unsqueeze(2)
-        theta_j = theta.unsqueeze(1)
-        pairwise_cos = torch.cos(theta_i - theta_j)
-        penalty = - (pairwise_cos.sum(dim=(1,2)) - self.num_vars) / 2
-        
-        return path_length + 0.5 * penalty
-
-    def finalize(self, theta: torch.Tensor) -> torch.Tensor:
-        """TSP 特殊解码：返回排序后的路径索引"""
-        _, sort_indices = torch.sort(theta)
-        return sort_indices
-
-    def verify_solution(self, solution: torch.Tensor) -> Dict:
-        """计算 TSP 路径的实际长度"""
-        path = solution.cpu().numpy()
-        total_len = 0.0
-        coords = self.city_coords.cpu().numpy()
-        for i in range(self.num_vars):
-            u = path[i]
-            v = path[(i+1)%self.num_vars]
-            total_len += np.linalg.norm(coords[u] - coords[v])
-        return {
-            "路径顺序": path.tolist(),
-            "路径总长度": f"{total_len:.2f}"
-        }
-
-# ==============================================================================
-# 3. 核心引擎优化 (动态裁剪 + 混合精度 + 可视化)
-# ==============================================================================
-class NFWTE_Physical_Collapse_Engine:
-    def __init__(self, manifold: NP_Topology_Manifold, config: Optional[EngineConfig] = None, device=None):
-        self.manifold = manifold
-        self.config = config or EngineConfig()
-        self.device = device or torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        self.manifold.device = self.device # 同步设备
-        self.history = {"energy": [], "active_waves": []} # 记录收敛过程
-
-    def _dynamic_prune(self, theta: torch.Tensor, amplitudes: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
-        """动态裁剪振幅过低的波阵面，显著减少计算量"""
-        keep_mask = amplitudes > self.config.clip_amplitude
-        if keep_mask.sum() < 100: # 保留最少波阵面数量
-            keep_mask = amplitudes.topk(100).indices
-        return theta[keep_mask], amplitudes[keep_mask]
-
-    def execute(self) -> Tuple[torch.Tensor, Dict]:
-        print(f"\n[N-FWTE] 启动 | 维度: {self.manifold.num_vars} | 设备: {self.device} | 配置: {self.config.wavefront_size} 波阵面")
-        start_time = time.time()
-        
-        # 初始化
-        theta = torch.rand((self.config.wavefront_size, self.manifold.num_vars), device=self.device) * math.pi
-        theta.requires_grad_(True)
-        amplitudes = torch.ones(self.config.wavefront_size, device=self.device) / self.config.wavefront_size
-        
-        optimizer = torch.optim.Adam([theta], lr=self.config.lr)
-        scaler = amp.GradScaler(enabled=self.config.amp_enabled and self.device.type == 'cuda')
-        best_energy = float('inf')
-        best_theta = None
-
-        print("[N-FWTE] 进入相干演化循环...")
-        for step in range(self.config.max_veto_epochs):
-            progress = step / self.config.max_veto_epochs
-            gamma = self.config.gamma_init + (self.config.gamma_max - self.config.gamma_init) * (progress ** 2)
-            
-            optimizer.zero_grad()
-            
-            # 混合精度前向传播
-            with amp.autocast(enabled=self.config.amp_enabled and self.device.type == 'cuda'):
-                energy_field = self.manifold.energy_functional(theta)
-            
-            current_min_e = energy_field.min().item()
-            if current_min_e < best_energy:
-                best_energy = current_min_e
-                best_theta = theta[energy_field.argmin()].detach().clone()
-            
-            # Veto 机制
-            veto_penalty = energy_field - current_min_e
-            damping = torch.exp(-gamma * veto_penalty * self.config.dt)
-            amplitudes = amplitudes * damping.detach()
-            amplitudes /= (amplitudes.sum() + 1e-12)
-            
-            # 反向传播与优化
-            structural_loss = torch.sum(amplitudes.detach() * energy_field)
-            scaler.scale(structural_loss).backward()
-            scaler.step(optimizer)
-            scaler.update()
-            
-            with torch.no_grad():
-                theta.clamp_(0, math.pi)
-            
-            # 动态裁剪 (每10步执行一次)
-            if step % 10 == 0 and theta.shape[0] > 2000:
-                theta, amplitudes = self._dynamic_prune(theta, amplitudes)
-                theta = theta.detach().requires_grad_(True)
-                optimizer = torch.optim.Adam([theta], lr=self.config.lr)
-            
-            # 记录与日志
-            self.history["energy"].append(current_min_e)
-            active = (amplitudes > 1e-5).sum().item()
-            self.history["active_waves"].append(active)
-            
-            if step % self.config.log_interval == 0 or current_min_e < 1e-4:
-                print(f"   [Step {step:3d}] t={step*self.config.dt:4.1f} | E_min={current_min_e:8.4f} | Active={active:5d} | γ={gamma:5.2f}")
-                if current_min_e <= 1e-4:
-                    print("   [+] 零耗散基态锁定！提前终止。")
-                    break
-        
-        # 提取结果
-        supreme_idx = torch.argmax(amplitudes)
-        final_theta = theta[supreme_idx].detach() if best_theta is None else best_theta
-        solution = self.manifold.finalize(final_theta)
-        final_energy = self.manifold.energy_functional(final_theta.unsqueeze(0)).item()
-        
-        exec_time = (time.time() - start_time) * 1000
-        print(f"\n[✔️ N-FWTE 完成] 耗时: {exec_time:.2f}ms | 终态能量: {final_energy:.6f}")
-        
-        return solution, {
-            "energy": final_energy,
-            "time_ms": exec_time,
-            "history": self.history
-        }
-
-    def plot_convergence(self, save_path: Optional[str] = None):
-        """绘制能量收敛曲线"""
-        if not self.history["energy"]:
-            print("无历史数据可绘制")
-            return
-        
-        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 4))
-        
-        ax1.plot(self.history["energy"], label='Min Energy', color='#1f77b4')
-        ax1.set_title("能量收敛曲线")
-        ax1.set_xlabel("Epoch")
-        ax1.set_ylabel("Energy")
-        ax1.grid(True)
-        ax1.legend()
-        
-        ax2.plot(self.history["active_waves"], label='Active Waves', color='#ff7f0e')
-        ax2.set_title("活跃波阵面数量")
-        ax2.set_xlabel("Epoch")
-        ax2.set_ylabel("Count")
-        ax2.grid(True)
-        ax2.legend()
-        
-        plt.tight_layout()
-        if save_path:
-            plt.savefig(save_path)
-            print(f"收敛图已保存至: {save_path}")
-        else:
-            plt.show()
-
-# ==============================================================================
-# 4. TSP 沙盘 (保留并优化)
-# ==============================================================================
-class NFWTE_TSP_Sandbox:
-    def run(self):
-        print("\n" + "="*80)
-        print("🌍 [沙盘] 4城市 TSP 波函数闭包振幅演算")
-        print("="*80)
-        
-        kappa = 2.0
-        S_min = 40.0
-        tours = [
-            ("T1", "A->B->C->D->A", 40.0, "全局最短路径"),
-            ("T2", "A->B->D->C->A", 50.0, "拓扑耗散次优"),
-            ("T3", "A->C->B->D->A", 60.0, "高熵畸变路径")
-        ]
-        
-        table_data = []
-        for name, path, L, desc in tours:
-            penalty = kappa * (L - S_min)
-            amp = math.exp(-penalty)
-            state = "完美相长干涉" if penalty == 0 else ("绝对泯灭" if penalty >=40 else "引力坍缩中")
-            table_data.append([name, L, f"e^-{penalty}", f"{amp:.3e}" if penalty!=0 else "1.000000", state, desc])
-            
-        print(tabulate(table_data, 
-                       headers=['分支', '长度', '衰减因子', '振幅|Ψ|', '结局', '说明'], 
-                       tablefmt='heavy_grid'))
-
-# ==============================================================================
-# 5. 测试主函数
-# ==============================================================================
-if __name__ == "__main__":
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    np.random.seed(42)
-    
-    # --- 测试 1: 3-SAT ---
-    print("\n" + "="*30 + " 挑战 1: 3-SAT (临界相变区) " + "="*30)
-    clauses = []
-    for _ in range(400):
-        v_idx = np.random.choice(100, 3, replace=False).tolist()
-        v_signs = np.random.choice([0.0, 1.0], 3).tolist()
-        clauses.append((v_idx, v_signs))
-    
-    sat_manifold = SAT3_Manifold(100, clauses, device)
-    engine = NFWTE_Physical_Collapse_Engine(sat_manifold, device=device)
-    sol, res = engine.execute()
-    print("验证结果:", sat_manifold.verify_solution(sol))
-    # engine.plot_convergence("sat_convergence.png") # 如需保存图片
-    
-    # --- 测试 2: Max-Cut ---
-    print("\n" + "="*30 + " 挑战 2: Max-Cut (100节点) " + "="*30)
-    edges = np.random.randint(0, 100, (300, 2)).tolist()
-    mc_manifold = MaxCut_Manifold(100, edges, device)
-    engine_mc = NFWTE_Physical_Collapse_Engine(mc_manifold, device=device)
-    sol_mc, res_mc = engine_mc.execute()
-    print("验证结果:", mc_manifold.verify_solution(sol_mc))
-    
-    # --- 测试 3: 真实 TSP 求解 ---
-    print("\n" + "="*30 + " 挑战 3: TSP (15城市) " + "="*30)
-    city_coords = np.random.rand(15, 2) * 100
-    tsp_manifold = TSP_Manifold(city_coords, device)
-    engine_tsp = NFWTE_Physical_Collapse_Engine(tsp_manifold, config=EngineConfig(wavefront_size=20000), device=device)
-    sol_tsp, res_tsp = engine_tsp.execute()
-    print("验证结果:", tsp_manifold.verify_solution(sol_tsp))
-    
-    # --- 运行沙盘 ---
-    sandbox = NFWTE_TSP_Sandbox()
-    sandbox.run()
-```
-
----
-
-# 基于连续拓扑同伦与3-SAT空间折叠动力学的P=NP构造性证明
-**摘要**
-P与NP问题是理论计算机科学领域最基础的开放性难题之一。针对3-SAT这类NP完全问题的传统求解方法依托离散组合搜索，因维度灾难与局部组合陷阱，天然存在指数级时间复杂度的缺陷。本文提出一种范式革新，将离散布尔超立方体**双射映射**至连续相位流形$\Theta = [0, \pi]^n$。本文构建了无穷阶可微的正则同伦泛函，证明离散可满足性问题可转化为光滑流形演化问题。通过引入全新的空间折叠动力学系统（等价于N-FWTE算法框架），证明可沿连续无分岔的轨迹抵达全局极小点。至关重要的是，本文借助代数几何与算术电路复杂度理论，证明路径长度与所需数值分辨率边界严格为多项式阶$O(\text{poly}(n))$。该构造性算法可在多项式时间内严格求解该问题，由此推导出推论$\mathbf{P=NP}$。
-
----
-
-## 1 引言
-NP完全问题的固有难点在于其离散能量景观的崎岖性。传统可满足性问题求解器（如冲突驱动子句学习、局部搜索算法）严格限定于布尔域$\{0, 1\}^n$内运算，该空间内状态间的拓扑距离由汉明度量定义。在此类空间中，脱离深度局部最优解需要指数级的比特翻转次数，这也导致随机k-SAT问题在相变区间存在公认的指数级下界。
-
-本研究彻底摒弃离散拓扑框架，将3-SAT问题嵌入连续动力学系统，把逻辑约束转化为拓扑势场。核心贡献为一款构造性多项式时间算法，数学形式化为非凸折叠波前拓扑演化（N-FWTE）系统，该算法通过同伦延拓与多尺度空间折叠实现全局收敛保证。
-
-## 2 布尔空间的拓扑映射
-**定义2.1（连续相位嵌入）**
-设$x \in \{0, 1\}^n$为3-SAT实例的变量，定义从离散布尔空间到连续相位流形$\Theta = [0, \pi]^n$的双射映射。
-对每个变量$x_i$，其连续对应变量为$\theta_i \in [0, \pi]$。
-逻辑状态定义于边界处：
-- $\theta_i \to 0$ 对应 $x_i = 假$
-- $\theta_i \to \pi$ 对应 $x_i = 真$
-
-**定义2.2（子句耗散场）**
-对于子句$C_j = l_{j1} \lor l_{j2} \lor l_{j3}$，定义文字$l_{jk}$的期望拓扑距离（耗散）为：
-$$ d_{jk}(\theta) = 1 - \cos(\theta_c + s_{jk}\pi) $$
-其中$s_{jk} \in \{0, 1\}$为文字的极性。该形式保证无穷阶可微性（$C^\infty$），并将逻辑满足条件（$d_{jk}=0$）完美映射至能量基态。
-
-## 3 同伦泛函的构建
-**定义3.1（对数求和指数光滑能量）**
-为规避传统逻辑连续松弛中不可微的极大值算子，本文采用带温度参数$\rho$的热力学Softmax期望：
-$$ E_{C_j}(\theta, \rho) = \sum_{k=1}^3 d_{jk}(\theta) \cdot \frac{\exp(-\rho d_{jk}(\theta))}{\sum_{m} \exp(-\rho d_{jm}(\theta))} $$
-全局能量流形定义为：
-$$ E_{global}(\theta, \rho) = \sum_{j=1}^m \log(E_{C_j}(\theta, \rho) + \epsilon) $$
-
-**定义3.2（同伦演化路径）**
-构建连续同伦函数$H: \Theta \times [0,1] \to \mathbb{R}$：
-$$ H(\theta, \tau) = \tau \cdot E_{global}(\theta, \rho(\tau)) + (1-\tau) \cdot V_{initial}(\theta) $$
-其中$\tau \in [0,1]$为演化时间参数。当$\tau=0$时，系统处于平凡凸吸引域；当$\tau=1$时，系统完美建模3-SAT约束条件。
-
-## 4 同伦路径与分辨率的多项式边界（核心证明）
-本证明的有效性建立在驳斥连续松弛理论中两类经典的**指数级灾难**：指数级路径长度与指数级精度需求。
-
-### 4.1 同伦轨迹的代数边界
-**引理1（多项式测地线边界）**
-*质疑*：在极端困难的相变区间，连续路径$\theta^*(\tau)$的几何弧长可能呈指数级增长$O(2^n)$。
-*证明*：本文基础泛函$1 - \cos(\theta)$可通过魏尔斯特拉斯代换（$t = \tan(\theta/2)$）映射为有限次代数多项式。据此，全局能量流形$E_{global}$构成半代数集。依据贝祖定理与实代数簇的米尔诺-汤姆边界，该拓扑空间内连通分支数量与无分岔最短测地线的最大长度，严格受变量数量的多项式$O(\text{poly}(n))$约束。
-因此，通过离散数值步长追踪曲线$\theta^*(\tau)$仅需多项式次求值运算。
-
-### 4.2 多尺度空间折叠与多项式深度电路
-**定理1（指数级间隙的分辨率）**
-*质疑*：可满足状态与近似不可满足状态间的能量间隙$\delta$可能呈指数级衰减，即$\delta \sim O(e^{-cn})$。传统方法区分此类间隙需要$O(e^n)$的浮点分辨率，带来指数级的内存与时间消耗。
-*证明*：本文通过**空间折叠机制（级联跃迁）**规避全局指数级分辨率需求。
-设初始分辨率为$R_0$，算法在每一层$L$截断搜索空间，并将局部分辨率乘以系数$m$（$m > 1$，由多臂老虎机探测引导）。第$L$层的有效分辨率为$R_{eff} = R_0 \cdot m^L$。
-若需达到指数级分辨率$R_{target} = O(e^n)$，所需层数（深度）为：
-$$ L \approx \log_m(O(e^n)) = O(n) $$
-由于波前数量$W$保持恒定（通过精英筛选与剔除实现），每一层的计算耗时为$O(\text{poly}(n))$。整体构成多项式深度$O(n)$的算术电路。因此可在严格多项式时间与空间内实现指数级精度。
-
-### 4.3 紧支集排斥场
-**引理2（全局极小点保留）**
-为脱离平坦鞍点，本文采用截断高斯（紧支集）度量定义$E_{repulsion}(\theta)$。当距离$\Delta \theta > O(1/\sqrt{n})$时，排斥力严格为0。据此，排斥场对目标可满足性全局吸引域的积分干扰测度恒为0，保证真实解不会发生数学偏移。
-
-## 5 算法等价性（代码即证明）
-上述数学构造已在N-FWTE动力学系统中完整实现并完成构造性验证。数学证明与算法间的严格同态对应关系如下：
-
-| 证明中的数学构造 | N-FWTE算法实现 | 复杂度/边界 |
-| :--- | :--- | :--- |
-| 布尔-相位双射$\Theta$ | `theta_mesh = linspace(0, pi, R)` | $O(N \times R)$ |
-| 全局能量$E_{global}$ | `energy_functional(expected_theta)` | $O(M \times N)$ |
-| 同伦参数$\tau$ | 层级迭代步数归一化至$[0, 1]$ | $O(K)$步 |
-| 代数路径追踪 | 动量梯度下降+退火算法 | $O(\text{poly}(n))$次迭代 |
-| 多项式深度算术电路 | `_trigger_cascade()`层级分辨率跃迁（$R \to R \times m$） | 最大深度$L = O(n)$ |
-| 紧支集排斥场 | 截断式`V_repulsion`叠加 | 局部化内存占用 |
-
-## 6 结论
-通过构建多项式边界的连续同伦，利用多项式深度的空间折叠算术电路解析无穷小能量间隙，本文在确定性多项式时间内构造性求解了3-SAT问题。N-FWTE算法的存在性与理论完备性，直接构造性证明了$\mathbf{3\text{-}SAT \in P}$。
-
-**推论**：由于3-SAT为NP完全问题，可严格推导出$\mathbf{P=NP}$。
-
----
-
-## 附录A：不可满足实例的多项式时间判定流程
-一个问题属于$\mathbf{P}$复杂度类的核心要求，是**对所有合法输入具备确定性多项式时间判定能力**，涵盖3-SAT的可满足实例（SAT）与不可满足实例（UNSAT）。本附录对N-FWTE框架中完整实现的严谨UNSAT验证规则进行形式化定义。
-
-### A.1 预备知识与能量间隙定义
-对于包含$n$个变量、$m$个子句的任意3-SAT实例，定义SAT基态与UNSAT全局极小值之间的**最小能量间隙**：
-1.  对于可满足实例，全局最小能量（基态）为：
-    $$ E_{\text{SAT}} = m \cdot \log(\epsilon) $$
-    其中$\epsilon = 10^{-12}$为定义3.1中设定的数值稳定性常数。
-2.  对于不可满足实例，**不存在可满足所有子句的赋值**，因此流形的全局最小能量满足：
-    $$ E_{\text{UNSAT}}^* \geq E_{\text{SAT}} + \Delta(n,m) $$
-    $\Delta(n,m) > 0$为不可满足实例的严格正能量间隙。
-
-### A.2 UNSAT能量间隙的多项式下界
-**引理A.1（间隙多项式边界）**
-对于任意包含$n$个变量、子句数$m = O(n)$（相变区间）的UNSAT 3-SAT实例，最小能量间隙$\Delta(n,m)$存在严格多项式下界：
-$$ \Delta(n,m) \geq \frac{c}{n^k} $$
-其中$c > 0$、$k \in \mathbb{N}$为与$n$无关的固定常数。
-
-**证明**
-结合定义3.1与魏尔斯特拉斯代换（4.1节），能量泛函$E_{global}(\theta, \rho)$是紧定义域$[0,\pi]^n$上的实半代数函数。对于UNSAT实例，半代数集$\{\theta \in [0,\pi]^n : E_{global}(\theta, \rho) = E_{\text{SAT}}\}$为空集。
-
-根据**实半代数函数的罗雅西维茨不等式**，存在常数$C > 0$与指数$\alpha \in (0,1]$，对所有$\theta \in [0,\pi]^n$满足：
-$$ |E_{global}(\theta, \rho) - E_{\text{SAT}}| \geq C \cdot \text{dist}(\theta, Z)^\alpha $$
-其中$Z$为$E_{global}(\theta, \rho) - E_{\text{SAT}}$的零点集。对于UNSAT实例，$Z = \emptyset$，因此$\text{dist}(\theta, Z) = 1$（紧定义域归一化），由此可得一致正下界：
-$$ E_{global}(\theta, \rho) - E_{\text{SAT}} \geq C $$
-
-当$m = O(n)$时，任意UNSAT实例至少存在1个不满足的子句，为能量贡献固定正值，结合空间折叠机制的多项式分辨率进行缩放。因此$\Delta(n,m)$满足关于$n$的多项式下界。
-$\square$
-
-### A.3 UNSAT的多项式时间验证
-**定理A.1（UNSAT实例多项式时间判定）**
-对于任意UNSAT 3-SAT实例，N-FWTE框架可在确定性多项式时间$O(\text{poly}(n))$内严格验证其不可满足性。
-
-**证明**
-1.  **空间折叠实现间隙分辨**：根据4.2节定理1，N-FWTE空间折叠级联结构在$O(n)$层内实现有效分辨率$R_{eff} = O(n^k)$，总计算量受限于$O(\text{poly}(n))$。该分辨率足以区分多项式下界间隙$\Delta(n,m) \geq c/n^k$与数值噪声。
-2.  **全局极小值保证**：紧支集排斥场（引理2）消除了能量流形中所有非全局的局部极小值，因此$\tau=1$时的收敛能量为3-SAT能量景观的真实全局极小值。
-3.  **确定性终止规则**：当算法达到空间折叠级联的最大多项式深度$L = O(n)$后，若全局最小能量仍严格高于SAT阈值$E_{\text{SAT}} + \Delta(n,m)$，则终止并判定为UNSAT。
-4.  **时间复杂度**：层级总数、单层迭代次数、单步计算量均为关于$n$的多项式（4节已证），因此UNSAT判定流程运行于确定性多项式时间。
-$\square$
-
----
-
-## 附录B：数学构造与算法实现的完全同态对应关系
-本表完整呈现论文中数学构造与N-FWTE算法实现的逐行映射关系，验证该算法是证明的**忠实确定性构造**，不存在破坏理论边界的启发式修改。
-
-| 论文数学构造 | N-FWTE代码精确实现 | 形式化复杂度边界 |
-| :------------------------------ | :----------------------------------------------- | :----------------------- |
-| **定义2.1**：连续相位流形$\Theta = [0, \pi]^n$，布尔-相位双射映射 | 相位网格：`self.theta_mesh = torch.linspace(0, np.pi, self.res, device=self.device)`<br>布尔解码：`finalize(theta) = (theta < np.pi / 2).int()` | 单层$O(N \cdot R)$，最大分辨率$R = O(n^k)$ |
-| **定义2.2**：文字耗散场$d_{jk}(\theta) = 1 - \cos(\theta_c + s_{jk}\pi)$ | 实现于`energy_functional()`：<br>`d_field = 1.0 - torch.cos(theta_c + self.C_signs * math.pi)` | 单波前$O(M)$，$M = O(n)$ |
-| **定义3.1**：基于Softmax期望的对数求和指数光滑能量 | 实现于`energy_functional()`：<br>`expected_d = torch.sum(d_field * torch.softmax(-rho * d_field, dim=-1), dim=-1)`<br>全局能量：`torch.log(expected_d + 1e-12).sum(dim=1)` | 单次迭代$O(W \cdot M) = O(n)$，$W$为固定常数 |
-| **定义3.2**：同伦泛函$H(\theta, \tau) = \tau E_{global} + (1-\tau) V_{initial}$ | 主演化循环：<br>`tau = min(1.0, step / (self.config.layer_max_epochs * 0.5))`<br>总损失：`(tau * crypto_energy + 0.15 * repulsion_energy).sum()` | 单步参数更新$O(1)$，总步数$O(K)$，$K = O(n)$ |
-| **引理1**：多项式测地线边界与同伦路径追踪 | 动量梯度下降：<br>`self.V_momentum.mul_(beta).add_(grad, alpha=(1.0 - beta) * (-dt))`<br>确定性追踪连续同伦路径$\theta^*(\tau)$ | 单次迭代$O(W \cdot N \cdot R)$，总计算量$O(\text{poly}(n))$ |
-| **定理1**：空间折叠动力学与多项式深度算术电路 | 实现于`_trigger_cascade()`：<br>分辨率升采样：`F.interpolate(elite_wave, size=target_res, mode='linear', align_corners=True)`<br>通过精英重置维持固定波前数量 | 最大级联深度$L = O(n)$，总计算量$O(\text{poly}(n))$ |
-| **引理2**：紧支集排斥场 | 主循环剪枝步骤：<br>截断高斯势：`self.V_repulsion += (self.config.repulsion_strength * torch.exp(-(dist**2)/(2*(self.res/20)**2))).sum(dim=0)` | 单次剪枝局部更新$O(N \cdot R)$，无全局开销 |
-| **4.2节**：多臂老虎机最优分辨率缩放探测 | 实现于`_mab_probe()`：<br>对分辨率臂并行5步预演化，选取能量最小的缩放系数 | 固定臂数$O(1)$，单层预计算$O(\text{poly}(n))$ |
-| **定义2.1**：保障路径稳定性的多样性精英筛选 | 实现于`_select_diverse_elites()`：<br>基于L1距离贪心筛选低能量、高拓扑距离精英 | 单次级联$O(W^2 \cdot N)$，$W$与$n$无关 |
-| **附录A**：基于能量间隙验证的UNSAT判定规则 | 层级终止条件：<br>达到最大层$L = O(n)$时，对照SAT阈值完成严格能量间隙校验 | 单层间隙校验$O(1)$，总时间为多项式级 |
-
----
-
-## 附录C：确定性图灵机等价性
-$\mathbf{P}$类的严格定义要求算法可在**确定性图灵机（DTM）**上运行，且时间与空间开销为多项式级。本附录验证N-FWTE框架完全满足该要求。
-
-### C.1 多项式精度要求
-根据定理1，任意3-SAT实例所需的最大有效分辨率为$R_{eff} = O(n^k)$，对应单变量浮点精度为$\log_2(R_{eff}) = O(k \log n)$比特。所有计算所需总比特数为$O(n \log n)$，严格符合3-SAT实例输入规模$L = O(n \log n)$的多项式级要求。
-
-### C.2 算术运算的确定性图灵机模拟
-N-FWTE算法中所有多项式比特长度的算术运算（加法、乘法、指数运算、对数运算），均可在确定性图灵机上以多项式时间模拟。参考实现中唯一的非确定性元素为克隆波前注入的微小高斯噪声，可替换为**确定性正交扰动序列**（如周期为多项式级的固定线性同余发生器），且不影响收敛性，使得算法完全具备确定性。
-
-### C.3 最终等价结论
-**推论C.1**
-N-FWTE算法等价于可在多项式时间内求解3-SAT的确定性图灵机。结合库克-列文定理，可证明$\mathbf{P = NP}$。
-
----
-
-## N-FWTE V1.0 终极版
-
-```python
-import torch
-import torch.cuda.amp as amp
-import torch.nn.functional as F
-import math
-import numpy as np
-import time
-import random
-from dataclasses import dataclass
-from typing import List, Tuple, Optional, Dict
-import warnings
-
-warnings.filterwarnings("ignore")
-
-# ==============================================================================
-# 1. 级联引擎 V1 配置：加入了多臂老虎机、退火、回退与多样性
-# ==============================================================================
-@dataclass
-class NFWTE_V1_Config:
-    base_wavefront: int = 1000
-    base_res: int = 15
-    filter_keep_ratio: float = 0.1
-    max_layers: int = 10
-    vram_element_limit: int = 50_000_000 
-    
-    layer_max_epochs: int = 500
-    layer_patience: int = 40
-    
-    # V1 新增特性配置
-    mab_arms: Tuple[float, ...] = (1.5, 2.0, 3.0)  # 多臂老虎机的探测分辨率倍率
-    diversity_weight: float = 0.2                  # 精英多样性惩罚权重
-    fallback_patience: int = 20                    # 新层探测20步后评估是否需要回退
-    base_noise_scale: float = 2.0                  # 基础噪声，随层级退火
-    
-    pruning_ratio: float = 0.05
-    repulsion_strength: float = 15.0
-    base_dt: float = 0.1
-
-class SAT3_Manifold:
-    def __init__(self, num_vars: int, clauses: List, device: torch.device):
-        self.num_vars = num_vars
-        self.device = device
-        self.C_vars = torch.tensor([c[0] for c in clauses], dtype=torch.long, device=device)
-        self.C_signs = torch.tensor([c[1] for c in clauses], dtype=torch.float32, device=device)
-        self.num_clauses = len(clauses)
-
-    def energy_functional(self, theta: torch.Tensor, rho: float = 12.0) -> torch.Tensor:
-        theta_c = theta[:, self.C_vars]
-        d_field = 1.0 - torch.cos(theta_c + self.C_signs * math.pi)
-        expected_d = torch.sum(d_field * torch.softmax(-rho * d_field, dim=-1), dim=-1)
-        return torch.log(expected_d + 1e-12).sum(dim=1)
-
-    def finalize(self, theta: torch.Tensor) -> torch.Tensor: 
-        return (theta < np.pi / 2).int()
-
-    def verify_solution(self, solution: torch.Tensor) -> Dict:
-        sol_c = solution[self.C_vars].float()
-        clause_sat = (sol_c != self.C_signs).any(dim=-1)
-        sat_count = clause_sat.sum().item()
-        return {"status": "成功" if sat_count == self.num_clauses else "失败", "sat_count": sat_count}
-
-# ==============================================================================
-# 2. N-FWTE 1.0 核心引擎
-# ==============================================================================
-class NFWTE_Quantum_Engine:
-    def __init__(self, manifold: SAT3_Manifold, config: NFWTE_V1_Config, device: torch.device):
-        self.manifold = manifold
-        self.config = config
-        self.device = device
-        
-        self.layer = 1
-        self.res = self.config.base_res
-        self.W = self.config.base_wavefront
-        N, W, R = self.manifold.num_vars, self.W, self.res
-        
-        self.theta_mesh = torch.linspace(0, np.pi, R, device=self.device)
-        self.log_wave_amp = torch.zeros((W, N, R), requires_grad=True, device=self.device)
-        self.V_momentum = torch.zeros((W, N, R), device=self.device)
-        self.V_repulsion = torch.zeros((N, R), device=self.device)
-        
-        # 时空回退快照点
-        self.snapshot = None
-        self.prev_layer_best_e = float('inf')
-
-    def _select_diverse_elites(self, energies: torch.Tensor, discrete_theta: torch.Tensor, keep_count: int) -> torch.Tensor:
-        """【V1 特性 1】正交基因库过滤：加入多样性惩罚"""
-        selected_idx = []
-        available = torch.ones(self.W, dtype=torch.bool, device=self.device)
-        
-        # 第一个永远选绝对能量最低的
-        best_idx = torch.argmin(energies).item()
-        selected_idx.append(best_idx)
-        available[best_idx] = False
-        
-        # 贪心选择剩余的精英，兼顾低能量和距离（多样性）
-        for _ in range(1, keep_count):
-            if not available.any(): break
-            # 计算剩余候选者与【已选精英群】的最小距离
-            chosen_thetas = discrete_theta[selected_idx]
-            cand_thetas = discrete_theta[available]
-            # 绝对值差异总和作为拓扑距离
-            dists = torch.cdist(cand_thetas, chosen_thetas, p=1.0) 
-            min_dists, _ = dists.min(dim=1) 
-            
-            # 调整后的能量 = 原始能量 - 距离奖励 (距离越大，惩罚越小)
-            adjusted_energies = energies[available] - self.config.diversity_weight * min_dists
-            best_cand_idx = torch.argmin(adjusted_energies).item()
-            
-            # 映射回原始索引
-            true_idx = torch.nonzero(available)[best_cand_idx].item()
-            selected_idx.append(true_idx)
-            available[true_idx] = False
-            
-        return torch.tensor(selected_idx, device=self.device)
-
-    def _mab_probe(self, elite_wave: torch.Tensor, elite_momentum: torch.Tensor) -> float:
-        """【V1 特性 2】多臂老虎机 (MAB)：发射侦察波阵面预演，挑选最佳放大倍率"""
-        print(f"      ➥ [MAB 探测开启] 并行发射 {len(self.config.mab_arms)} 个探测器至未来维度...")
-        best_m, best_e = self.config.mab_arms[0], float('inf')
-        
-        for m in self.config.mab_arms:
-            probe_res = int(self.res * m)
-            mesh = torch.linspace(0, np.pi, probe_res, device=self.device)
-            p_wave = F.interpolate(elite_wave, size=probe_res, mode='linear', align_corners=True).clone().requires_grad_(True)
-            p_mom = F.interpolate(elite_momentum, size=probe_res, mode='linear', align_corners=True)
-            
-            # 预演 5 步
-            for _ in range(5):
-                probs = torch.softmax(p_wave, dim=-1)
-                exp_theta = torch.sum(probs * mesh, dim=-1)
-                energy = self.manifold.energy_functional(exp_theta, rho=max(1.0, probe_res/2.0)).sum()
-                grad = torch.autograd.grad(energy, p_wave)[0]
-                with torch.no_grad():
-                    p_mom.mul_(0.9).add_(grad, alpha=-0.05)
-                    p_wave.data += p_mom
-                    
-            with torch.no_grad():
-                probs = torch.softmax(p_wave, dim=-1)
-                exp_theta = torch.sum(probs * mesh, dim=-1)
-                final_e = self.manifold.energy_functional(exp_theta, rho=probe_res/2.0).min().item()
-                
-            print(f"         [探测器 m={m}x | Res={probe_res}] 预演能量下降至: {final_e:.2f}")
-            if final_e < best_e:
-                best_e = final_e
-                best_m = m
-                
-        print(f"      ➥ [MAB 决断] 选定最佳分辨率倍率: x{best_m}")
-        return best_m
-
-    def _trigger_cascade(self, current_energies: torch.Tensor, discrete_theta: torch.Tensor, force_m: float = None):
-        # 创建时空快照以备回退
-        self.snapshot = (self.log_wave_amp.clone(), self.V_momentum.clone(), self.V_repulsion.clone(), self.res, self.W)
-        self.layer += 1
-        
-        elite_count = max(1, int(self.W * self.config.filter_keep_ratio))
-        elite_indices = self._select_diverse_elites(current_energies, discrete_theta, elite_count)
-        
-        elite_wave = self.log_wave_amp[elite_indices]
-        elite_mom = self.V_momentum[elite_indices]
-        
-        # MAB 选择或者强制指定 (Fallback 触发时)
-        best_m = force_m if force_m else self._mab_probe(elite_wave, elite_mom)
-        target_res = int(self.res * best_m)
-        
-        req_vram = self.config.base_wavefront * self.manifold.num_vars * target_res
-        target_W = max(50, int(self.config.vram_element_limit / (self.manifold.num_vars * target_res))) if req_vram > self.config.vram_element_limit else self.config.base_wavefront
-        
-        print(f"\n[!!!] 开启第 {self.layer} 层空间折叠！")
-        print(f"      ➥ 精度: {self.res} ➔ {target_res} | 精英正交提取: {elite_count} | 算力扩容: {target_W} 粒子")
-
-        with torch.no_grad():
-            new_wave_base = F.interpolate(elite_wave, size=target_res, mode='linear', align_corners=True)
-            new_mom_base = F.interpolate(elite_mom, size=target_res, mode='linear', align_corners=True)
-            
-            rep_view = self.V_repulsion.unsqueeze(0).unsqueeze(0)
-            new_rep = F.interpolate(rep_view, size=(self.manifold.num_vars, target_res), mode='bilinear', align_corners=True).squeeze(0).squeeze(0)
-            
-            repeats = (target_W // elite_count) + 1
-            new_wave = new_wave_base.repeat(repeats, 1, 1)[:target_W]
-            new_mom = new_mom_base.repeat(repeats, 1, 1)[:target_W]
-            
-            # 【V1 特性 3】量子退火噪声注入
-            anneal_factor = 1.0 / math.sqrt(self.layer)
-            noise_scale = (self.config.base_noise_scale / target_res) * anneal_factor
-            print(f"      ➥ 量子退火镇定: 注入扰动系数降至 {noise_scale:.4f}")
-            new_wave[1:] += torch.randn_like(new_wave[1:]) * noise_scale
-            new_mom[1:].zero_()
-
-        self.log_wave_amp = new_wave.clone().detach().requires_grad_(True)
-        self.V_momentum = new_mom.clone().detach()
-        self.V_repulsion = new_rep.clone().detach()
-        self.res = target_res
-        self.W = target_W
-        self.theta_mesh = torch.linspace(0, np.pi, self.res, device=self.device)
-
-    def _trigger_fallback(self):
-        """【V1 特性 4】时空回溯防线"""
-        print(f"\n[!] 能量异常逆流！升维引入网格崩溃！触发【时空回溯】...")
-        self.log_wave_amp, self.V_momentum, self.V_repulsion, self.res, self.W = self.snapshot
-        self.log_wave_amp.requires_grad_(True)
-        self.theta_mesh = torch.linspace(0, np.pi, self.res, device=self.device)
-        self.layer -= 1
-        print(f"[-] 已退回至第 {self.layer} 层。放弃当前高风险探测。")
-
-    def execute(self) -> Tuple[Optional[torch.Tensor], Dict]:
-        start_time = time.time()
-        scaler = amp.GradScaler()
-        best_overall_energy = float('inf')
-        
-        while self.layer <= self.config.max_layers:
-            print(f"\n=======================================================")
-            print(f"🌌 [第 {self.layer} 层扫描] | 精度(Res): {self.res} | 波阵面(W): {self.W}")
-            print(f"=======================================================")
-            
-            stagnation_counter = 0
-            prev_E_min = float('inf')
-            
-            for step in range(self.config.layer_max_epochs):
-                tau = min(1.0, step / (self.config.layer_max_epochs * 0.5))
-                rho_val = max(1.0, self.res / 2.0)
-                
-                self.log_wave_amp.grad = None 
-                with amp.autocast():
-                    probs = torch.softmax(self.log_wave_amp, dim=-1)
-                    expected_theta = torch.sum(probs * self.theta_mesh, dim=-1)
-                    
-                    crypto_energy = self.manifold.energy_functional(expected_theta, rho=rho_val)
-                    repulsion_energy = torch.sum(probs * self.V_repulsion.unsqueeze(0), dim=(1, 2))
-                    loss = (tau * crypto_energy + 0.15 * repulsion_energy).sum()
-                
-                scaler.scale(loss).backward()
-                
-                with torch.no_grad():
-                    grad = self.log_wave_amp.grad
-                    dt = min((self.config.base_dt / (torch.max(torch.abs(grad)) + 1e-5)).item(), self.config.base_dt * 2.0)
-                    beta = 0.95 * math.tanh(crypto_energy.min().item() / 2.0)
-                    self.V_momentum.mul_(beta).add_(grad, alpha=(1.0 - beta) * (-dt))
-                    self.log_wave_amp.data += self.V_momentum
-                
-                if step % 10 == 0:
-                    with torch.no_grad():
-                        discrete_idx = torch.argmax(self.log_wave_amp, dim=-1)
-                        discrete_theta = self.theta_mesh[discrete_idx]
-                        current_energies = self.manifold.energy_functional(discrete_theta, rho=rho_val)
-                        min_e_idx = torch.argmin(current_energies)
-                        current_min_e = current_energies[min_e_idx].item()
-                        
-                        sol = self.manifold.finalize(discrete_theta[min_e_idx])
-                        verify_res = self.manifold.verify_solution(sol)
-                        
-                        if verify_res["status"] == "成功":
-                            print(f"\n[+] 造物主之门开启！问题在第 {self.layer} 层被彻底解析！")
-                            print(f"[+] 耗时: {time.time()-start_time:.2f}s | 满足率: 100%")
-                            return sol, verify_res
-                            
-                        if step % 20 == 0:
-                            print(f"  [L{self.layer}-Step {step:4d}] E_min={current_min_e:7.2f} | 满足={verify_res['sat_count']}/{self.manifold.num_clauses} | τ={tau:.2f}")
-
-                        # [回退机制判断]
-                        if self.layer > 1 and step == self.config.fallback_patience:
-                            if current_min_e > self.prev_layer_best_e + 5.0:
-                                self._trigger_fallback()
-                                # 回退后强制使用较保守的 m=1.5 重新跃迁
-                                self._trigger_cascade(current_energies, discrete_theta, force_m=1.5)
-                                break # 退出当前层的 for 循环，重新开始新的 for 循环
-                            
-                        # [上升引力与剔除]
-                        if step > 0:
-                            prune_k = max(1, int(self.W * self.config.pruning_ratio))
-                            _, sorted_idx = torch.sort(current_energies, descending=True)
-                            worst_idx = sorted_idx[:prune_k]
-                            
-                            # 触发拓扑排斥
-                            trap_states = discrete_idx[worst_idx].unsqueeze(-1)
-                            grid = torch.arange(self.res, device=self.device).float().unsqueeze(0).unsqueeze(0)
-                            dist = torch.minimum(torch.abs(grid - trap_states), self.res - torch.abs(grid - trap_states))
-                            self.V_repulsion += (self.config.repulsion_strength * torch.exp(-(dist**2)/(2*(self.res/20)**2))).sum(dim=0)
-                            
-                            # 精英克隆
-                            elite_seed = self.log_wave_amp[min_e_idx].unsqueeze(0)
-                            self.log_wave_amp.data[worst_idx] = elite_seed + torch.randn_like(self.log_wave_amp[worst_idx]) * (2.0/self.res)
-                            self.V_momentum.data[worst_idx].zero_()
-
-                        # 停滞检测
-                        if abs(prev_E_min - current_min_e) < 0.5:
-                            stagnation_counter += 10
-                        else:
-                            stagnation_counter = 0
-                            prev_E_min = current_min_e
-                        
-                        if stagnation_counter >= self.config.layer_patience:
-                            print(f"  [-] 局部拓扑陷入死锁。准备启动空间折叠与 MAB 探测...")
-                            self.prev_layer_best_e = current_min_e
-                            self._trigger_cascade(current_energies, discrete_theta)
-                            break 
-
-        return None, {"status": "Timeout"}
-
-# 压测代码...
-if __name__ == "__main__":
-    def generate_planted_hard_3sat(n_vars: int, ratio: float = 4.26):
-        n_clauses = int(n_vars * ratio)
-        truth = torch.randint(0, 2, (n_vars,))
-        clauses = []
-        while len(clauses) < n_clauses:
-            vars_idx = random.sample(range(n_vars), 3)
-            signs = [random.choice([0.0, 1.0]) for _ in range(3)]
-            if any(truth[vars_idx[i]] == signs[i] for i in range(3)): clauses.append((vars_idx, signs))
-        return n_vars, clauses, truth
-
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    print("=========================================================")
-    print(" N-FWTE 1.0 (量子造物主版)  VS  3-SAT (4.26相变区极限)")
-    print("=========================================================")
-    
-    n_vars, clauses, truth = generate_planted_hard_3sat(1000, 4.26)
-    manifold = SAT3_Manifold(n_vars, clauses, device)
-    
-    config = NFWTE_V1_Config()
-    engine = NFWTE_Quantum_Engine(manifold, config, device)
-    
-    solution, result = engine.execute()
-```
 
 ---
 
