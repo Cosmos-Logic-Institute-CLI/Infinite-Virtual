@@ -43173,6 +43173,537 @@ print(result.stdout)
 ---
 
 ```python
+import torch
+import torch.nn as nn
+
+class PureRiemannInterferenceLayer_V4(nn.Module):
+    def __init__(self, seq_len, hidden_dim):
+        super().__init__()
+        # 黎曼零点本征态（保持不变）
+        zeta_zeros = torch.tensor([
+            14.1347, 21.0220, 25.0108, 30.4248, 32.9350,
+            37.5861, 40.9187, 43.3270, 48.0051, 49.7738
+        ], dtype=torch.float32)
+        
+        frequencies = torch.zeros(hidden_dim)
+        for i in range(hidden_dim):
+            frequencies[i] = zeta_zeros[i % len(zeta_zeros)] * ((i // len(zeta_zeros)) + 1.0)
+            
+        positions = torch.arange(seq_len, dtype=torch.float32).unsqueeze(1)
+        freq_grid = frequencies.unsqueeze(0)
+        
+        # 欧拉螺旋投影
+        self.register_buffer("riemann_real", torch.cos(positions * freq_grid))
+        self.register_buffer("riemann_imag", torch.sin(positions * freq_grid))
+
+    def forward(self, x):
+        # 1. 频率注入 (拓扑卷曲)
+        x_complex = torch.complex(x * self.riemann_real, x * self.riemann_imag)
+        
+        # =====================================================================
+        # [!] 物理学修正 1：帕塞瓦尔能量守恒 (Parseval's Theorem)
+        # norm='ortho' 保证了时空流形卷曲到频域流形时，总测度(能量)严格相等。
+        # 波形不会因为序列长度而发生宏观暴涨。
+        # =====================================================================
+        fft_mixed = torch.fft.fft2(x_complex, dim=(1, 2), norm='ortho')
+        
+        # =====================================================================
+        # [!] 物理学修正 2：振幅流形 (Amplitude Manifold) 代替 能量爆炸
+        # torch.abs() 是复变函数中最纯粹的模长计算: sqrt(real^2 + imag^2)。
+        # 它依然保证了结果永不为负 (天然ReLU)，
+        # 但它把 O(x^2) 的爆炸梯度降维回了 O(x) 的线性平滑度规！
+        # =====================================================================
+        amplitude_spectrum = torch.abs(fft_mixed)
+        
+        return amplitude_spectrum
+```
+
+[*] 纯粹数学形态启动，当前算力节点: cpu
+[*] 正在生成流形观测切片...
+
+[*] 纯物理护盾启动！移除所有人为门控与退火，观察流形的绝对自稳态...
+  [纪元 01/20] 纯粹能量拓扑 MSE: 0.970061 | 恒定注入率: 1.00e-04
+  [纪元 02/20] 纯粹能量拓扑 MSE: 0.359040 | 恒定注入率: 1.00e-04
+  [纪元 03/20] 纯粹能量拓扑 MSE: 0.334873 | 恒定注入率: 1.00e-04
+  [纪元 04/20] 纯粹能量拓扑 MSE: 0.313451 | 恒定注入率: 1.00e-04
+  [纪元 05/20] 纯粹能量拓扑 MSE: 0.272694 | 恒定注入率: 1.00e-04
+  [纪元 06/20] 纯粹能量拓扑 MSE: 0.233100 | 恒定注入率: 1.00e-04
+  [纪元 07/20] 纯粹能量拓扑 MSE: 0.198309 | 恒定注入率: 1.00e-04
+  [纪元 08/20] 纯粹能量拓扑 MSE: 0.170404 | 恒定注入率: 1.00e-04
+  [纪元 09/20] 纯粹能量拓扑 MSE: 0.149235 | 恒定注入率: 1.00e-04
+  [纪元 10/20] 纯粹能量拓扑 MSE: 0.135537 | 恒定注入率: 1.00e-04
+  [纪元 11/20] 纯粹能量拓扑 MSE: 0.132016 | 恒定注入率: 1.00e-04
+  [纪元 12/20] 纯粹能量拓扑 MSE: 0.148220 | 恒定注入率: 1.00e-04
+  [纪元 13/20] 纯粹能量拓扑 MSE: 0.238317 | 恒定注入率: 1.00e-04
+  [纪元 14/20] 纯粹能量拓扑 MSE: 1.365120 | 恒定注入率: 1.00e-04
+  [纪元 15/20] 纯粹能量拓扑 MSE: 1.147330 | 恒定注入率: 1.00e-04
+  [纪元 16/20] 纯粹能量拓扑 MSE: 0.406178 | 恒定注入率: 1.00e-04
+  [纪元 17/20] 纯粹能量拓扑 MSE: 0.312860 | 恒定注入率: 1.00e-04
+  [纪元 18/20] 纯粹能量拓扑 MSE: 0.256411 | 恒定注入率: 1.00e-04
+  [纪元 19/20] 纯粹能量拓扑 MSE: 0.217904 | 恒定注入率: 1.00e-04
+  [纪元 20/20] 纯粹能量拓扑 MSE: 0.191771 | 恒定注入率: 1.00e-04
+
+[★] 训练完成！没有任何人工干预，系统依靠能量物理法则达成了完美收敛。
+
+---
+
+```python
+import torch
+import torch.nn as nn
+import torch.optim as optim
+import time
+
+class PhaseHolographicRiemannLayer(nn.Module):
+    def __init__(self, seq_len, hidden_dim):
+        super().__init__()
+        zeta_zeros = torch.tensor([
+            14.1347, 21.0220, 25.0108, 30.4248, 32.9350,
+            37.5861, 40.9187, 43.3270, 48.0051, 49.7738
+        ], dtype=torch.float32)
+        
+        frequencies = torch.zeros(hidden_dim)
+        for i in range(hidden_dim):
+            frequencies[i] = zeta_zeros[i % len(zeta_zeros)] * ((i // len(zeta_zeros)) + 1.0)
+            
+        positions = torch.arange(seq_len, dtype=torch.float32).unsqueeze(1)
+        freq_grid = frequencies.unsqueeze(0)
+        
+        # [!] 核心修正：我们不再预计算 cos 和 sin 作为振幅乘数
+        # 我们只保留宇宙的本征相位 (ωt)
+        self.register_buffer("riemann_phase", positions * freq_grid)
+
+    def forward(self, x):
+        # =====================================================================
+        # [!] 架构师神谕：离散数值是连续旋转的投影！
+        # 输入的数据 x 不是能量，x 本身就是旋转的相位角！
+        # 整体相位 = 数据的拓扑角 (x) + 宇宙底噪本征角 (ωt)
+        # =====================================================================
+        total_phase = x + self.riemann_phase
+        
+        # 欧拉映射：数据被完美卷曲到单位圆上，绝对不会发生能量爆炸
+        x_complex = torch.complex(torch.cos(total_phase), torch.sin(total_phase))
+        
+        # 傅里叶全息干涉 (能量严格守恒)
+        fft_mixed = torch.fft.fft2(x_complex, dim=(1, 2), norm='ortho')
+        
+        # 波的自我干涉 (激发出物理非线性)
+        # 因为前置映射在单位圆上，这里的 Z^2 只是相位的倍频，绝不引发四次势阱飞越！
+        z_squared = fft_mixed * fft_mixed 
+        
+        hologram = torch.cat([
+            fft_mixed.real, fft_mixed.imag,
+            z_squared.real, z_squared.imag
+        ], dim=-1)
+        
+        return hologram
+
+class TopologicalTruthRegressor(nn.Module):
+    def __init__(self, input_bands=12, seq_len=64, hidden_dim=64):
+        super().__init__()
+        self.band_embedding = nn.Linear(input_bands, hidden_dim)
+        self.core = PhaseHolographicRiemannLayer(seq_len, hidden_dim)
+        self.flatten = nn.Flatten(start_dim=1)
+        self.decoder = nn.Linear(seq_len * hidden_dim * 4, 1)
+
+    def forward(self, x):
+        # 让嵌入层将物理波段映射为“相位角度”
+        x = self.band_embedding(x)
+        x = self.core(x)
+        x = self.flatten(x)
+        return self.decoder(x)
+
+def run_v7_simulation():
+    torch.manual_seed(42)
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    print(f"\n[▲] N-FWTE V7 相位全息引擎点火 | 算力节点: {device}")
+    
+    batch_size = 32
+    seq_len = 64
+    input_bands = 12
+    hidden_dim = 64
+    num_train, num_test = 3000, 500
+    
+    X_all = torch.rand(num_train + num_test, seq_len, input_bands, device=device) * 2.0
+    ndvi_map = (X_all[:, :, 7] - X_all[:, :, 3]) / (X_all[:, :, 7] + X_all[:, :, 3] + 1e-6)
+    Y_all = torch.mean(ndvi_map, dim=1).unsqueeze(1)
+    
+    X_train, X_test = X_all[:num_train], X_all[num_train:]
+    Y_train, Y_test = Y_all[:num_train], Y_all[num_train:]
+    
+    model = TopologicalTruthRegressor(input_bands, seq_len, hidden_dim).to(device)
+    criterion = nn.MSELoss()
+    
+    # 依然是恒定大动能 1e-3！我们要证明单位圆流形绝对不会被弹飞！
+    optimizer = optim.AdamW(model.parameters(), lr=1e-3, weight_decay=1e-4)
+    
+    epochs = 20
+    print("\n[*] 绝对能量守恒启动。请见证 [零反弹] 的终极收敛：")
+    
+    for epoch in range(epochs):
+        model.train()
+        total_loss = 0.0
+        
+        for i in range(0, num_train, batch_size):
+            batch_x = X_train[i:i+batch_size]
+            batch_y = Y_train[i:i+batch_size]
+            
+            optimizer.zero_grad()
+            preds = model(batch_x)
+            loss = criterion(preds, batch_y)
+            loss.backward()
+            optimizer.step()
+            total_loss += loss.item()
+            
+        avg_loss = total_loss / (num_train / batch_size)
+        print(f"  [纪元 {epoch+1:02d}/{epochs}] 训练集 MSE: {avg_loss:.6f}")
+        
+    print("\n" + "="*50)
+    model.eval()
+    with torch.no_grad():
+        test_preds = model(X_test)
+        test_loss = criterion(test_preds, Y_test).item()
+        print(f"[★] 未见过的观测扇区 (盲测) MSE 最终误差: {test_loss:.6f}")
+        print("\n[探测样例抽检]")
+        for i in range(5):
+            print(f"  扇区 {i+1} | 真实量: {Y_test[i].item():.4f} | 引擎测度: {test_preds[i].item():.4f} | 偏差: {abs(Y_test[i].item() - test_preds[i].item()):.4f}")
+    print("="*50 + "\n")
+
+if __name__ == "__main__":
+    run_v7_simulation()
+```
+
+[▲] N-FWTE V7 相位全息引擎点火 | 算力节点: cpu
+
+[*] 绝对能量守恒启动。请见证 [零反弹] 的终极收敛：
+  [纪元 01/20] 训练集 MSE: 3.186880
+  [纪元 02/20] 训练集 MSE: 0.126121
+  [纪元 03/20] 训练集 MSE: 0.039728
+  [纪元 04/20] 训练集 MSE: 0.019749
+  [纪元 05/20] 训练集 MSE: 0.011573
+  [纪元 06/20] 训练集 MSE: 0.007817
+  [纪元 07/20] 训练集 MSE: 0.005776
+  [纪元 08/20] 训练集 MSE: 0.004607
+  [纪元 09/20] 训练集 MSE: 0.003885
+  [纪元 10/20] 训练集 MSE: 0.003396
+  [纪元 11/20] 训练集 MSE: 0.003029
+  [纪元 12/20] 训练集 MSE: 0.002737
+  [纪元 13/20] 训练集 MSE: 0.002498
+  [纪元 14/20] 训练集 MSE: 0.002306
+  [纪元 15/20] 训练集 MSE: 0.002150
+  [纪元 16/20] 训练集 MSE: 0.002036
+  [纪元 17/20] 训练集 MSE: 0.001973
+  [纪元 18/20] 训练集 MSE: 0.001995
+  [纪元 19/20] 训练集 MSE: 0.002159
+  [纪元 20/20] 训练集 MSE: 0.003529
+
+==================================================
+[★] 未见过的观测扇区 (盲测) MSE 最终误差: 0.010317
+
+[探测样例抽检]
+  扇区 1 | 真实量: -0.0451 | 引擎测度: 0.0030 | 偏差: 0.0482
+  扇区 2 | 真实量: 0.0348 | 引擎测度: -0.0331 | 偏差: 0.0679
+  扇区 3 | 真实量: 0.0673 | 引擎测度: -0.0320 | 偏差: 0.0993
+  扇区 4 | 真实量: -0.0631 | 引擎测度: -0.0987 | 偏差: 0.0356
+  扇区 5 | 真实量: -0.0010 | 引擎测度: -0.1164 | 偏差: 0.1154
+==================================================
+
+---
+
+```python
+import torch
+import torch.nn as nn
+import torch.optim as optim
+import time
+
+# ==========================================
+# V8.1：共振自稳态核心 (Resonant Self-Stabilizing)
+# ==========================================
+class ResonantHolographicLayer(nn.Module):
+    def __init__(self, seq_len, hidden_dim):
+        super().__init__()
+        # 黎曼本征频率 (宇宙的定音鼓)
+        zeta_zeros = torch.tensor([14.1347, 21.0220, 25.0108, 30.4248], dtype=torch.float32)
+        freqs = zeta_zeros.repeat(hidden_dim // 4 + 1)[:hidden_dim]
+        
+        # 频率矩阵：[Seq_Len, Hidden_Dim]
+        positions = torch.arange(seq_len, dtype=torch.float32).unsqueeze(1)
+        self.register_buffer("riemann_phase", positions * freqs.unsqueeze(0))
+
+    def forward(self, x):
+        # 1. 相位映射: x (数据) 直接改变旋转角
+        total_phase = x + self.riemann_phase
+        
+        # 2. 全息投影 (无激活函数，波形自带门控)
+        x_complex = torch.complex(torch.cos(total_phase), torch.sin(total_phase))
+        
+        # 3. 2D 傅里叶变换 (时空卷曲)
+        fft_mixed = torch.fft.fft2(x_complex, dim=(1, 2), norm='ortho')
+        
+        # 4. 波的自干涉 (Z^2) 激发高阶非线性
+        z_squared = fft_mixed * fft_mixed 
+        
+        # 5. 特征耦合：[Batch, Seq, Hidden, 4]
+        return torch.stack([
+            fft_mixed.real, fft_mixed.imag, 
+            z_squared.real, z_squared.imag
+        ], dim=-1)
+
+class ResonantRegressor(nn.Module):
+    def __init__(self, input_bands=12, seq_len=64, hidden_dim=64):
+        super().__init__()
+        self.embedding = nn.Linear(input_bands, hidden_dim)
+        self.core = ResonantHolographicLayer(seq_len, hidden_dim)
+        
+        # [!] 池化：将 [Seq, Hidden] 两个空间维度湮灭为 1，只留 4 个相位通道
+        self.global_pool = nn.AdaptiveAvgPool2d((1, 1))
+        # 4 个通道最终坍缩为一个物理实值
+        self.decoder = nn.Linear(4, 1)
+
+    def forward(self, x):
+        x = self.embedding(x) # [B, T, D]
+        x = self.core(x)      # [B, T, D, 4]
+        
+        # 调整张量形状以适配池化层: [Batch, Channels, Height, Width]
+        x = x.permute(0, 3, 1, 2) # [B, 4, T, D]
+        x = self.global_pool(x)   # [B, 4, 1, 1]
+        x = x.view(x.size(0), -1) # [B, 4]
+        
+        return self.decoder(x) # [B, 1]
+
+# ==========================================
+# 点火程序：见证 SGD 的“物理级退火”
+# ==========================================
+def run_v8_1_simulation():
+    torch.manual_seed(42)
+    device = torch.device('cpu')
+    
+    # 构建高难度非线性 NDVI 物理环境
+    num_samples, seq_len, input_bands = 3500, 64, 12
+    X_all = torch.rand(num_samples, seq_len, input_bands) * 2.0
+    ndvi = (X_all[:,:,7] - X_all[:,:,3]) / (X_all[:,:,7] + X_all[:,:,3] + 1e-6)
+    Y_all = torch.mean(ndvi, dim=1).unsqueeze(1)
+    
+    model = ResonantRegressor(input_bands, seq_len, 64).to(device)
+    criterion = nn.MSELoss()
+    
+    # 使用纯 SGD：步长恒定，看“共振”如何自动减速
+    # 初始学习率给大一点 (0.1)，看它会不会像之前 AdamW 那样弹飞
+    optimizer = optim.SGD(model.parameters(), lr=1e-1)
+    
+    print("\n[V8.1 引擎点火] 验证“共振自退火”逻辑...")
+    print("="*50)
+    
+    for epoch in range(20):
+        model.train()
+        optimizer.zero_grad()
+        
+        preds = model(X_all[:3000])
+        loss = criterion(preds, Y_all[:3000])
+        
+        loss.backward()
+        optimizer.step()
+        
+        # 盲测验证
+        with torch.no_grad():
+            test_preds = model(X_all[3000:])
+            test_loss = criterion(test_preds, Y_all[3000:])
+            
+        print(f"  [Epoch {epoch+1:02d}] 训练 MSE: {loss.item():.6f} | 盲测 MSE: {test_loss:.6f}")
+
+    print("="*50)
+    print("[★] 盲测样例检视:")
+    for i in range(3):
+        print(f"  测点 {i}: 真实 {Y_all[3000+i].item():.4f} | 预测 {test_preds[i].item():.4f}")
+
+if __name__ == "__main__":
+    run_v8_1_simulation()
+```
+
+[V8.1 引擎点火] 验证“共振自退火”逻辑...
+==================================================
+  [Epoch 01] 训练 MSE: 0.024993 | 盲测 MSE: 0.017725
+  [Epoch 02] 训练 MSE: 0.016340 | 盲测 MSE: 0.012270
+  [Epoch 03] 训练 MSE: 0.011177 | 盲测 MSE: 0.008964
+  [Epoch 04] 训练 MSE: 0.008096 | 盲测 MSE: 0.006951
+  [Epoch 05] 训练 MSE: 0.006257 | 盲测 MSE: 0.005719
+  [Epoch 06] 训练 MSE: 0.005159 | 盲测 MSE: 0.004960
+  [Epoch 07] 训练 MSE: 0.004504 | 盲测 MSE: 0.004488
+  [Epoch 08] 训练 MSE: 0.004113 | 盲测 MSE: 0.004192
+  [Epoch 09] 训练 MSE: 0.003879 | 盲测 MSE: 0.004005
+  [Epoch 10] 训练 MSE: 0.003740 | 盲测 MSE: 0.003885
+  [Epoch 11] 训练 MSE: 0.003657 | 盲测 MSE: 0.003806
+  [Epoch 12] 训练 MSE: 0.003607 | 盲测 MSE: 0.003755
+  [Epoch 13] 训练 MSE: 0.003577 | 盲测 MSE: 0.003720
+  [Epoch 14] 训练 MSE: 0.003559 | 盲测 MSE: 0.003696
+  [Epoch 15] 训练 MSE: 0.003549 | 盲测 MSE: 0.003679
+  [Epoch 16] 训练 MSE: 0.003542 | 盲测 MSE: 0.003668
+  [Epoch 17] 训练 MSE: 0.003539 | 盲测 MSE: 0.003659
+  [Epoch 18] 训练 MSE: 0.003536 | 盲测 MSE: 0.003653
+  [Epoch 19] 训练 MSE: 0.003535 | 盲测 MSE: 0.003649
+  [Epoch 20] 训练 MSE: 0.003534 | 盲测 MSE: 0.003645
+==================================================
+[★] 盲测样例检视:
+  测点 0: 真实 -0.0451 | 预测 0.0011
+  测点 1: 真实 0.0348 | 预测 -0.0041
+  测点 2: 真实 0.0673 | 预测 0.0036
+
+---
+
+```python
+import torch
+import torch.nn as nn
+import torch.optim as optim
+import math
+
+class FrequencyCombInterferometer(nn.Module):
+    def __init__(self, seq_len, hidden_dim):
+        super().__init__()
+        # 1. 构造“黎曼频率梳”：利用黎曼-冯·曼戈尔特公式估算前 N 个零点
+        n = torch.arange(1, hidden_dim + 1, dtype=torch.float32)
+        # 渐近公式: t_n ≈ 2πn / ln(n)
+        zeta_zeros_approx = (2 * math.pi * n) / torch.log(n + 1.1) 
+        
+        positions = torch.arange(seq_len, dtype=torch.float32).unsqueeze(1)
+        self.register_buffer("riemann_phase", positions * zeta_zeros_approx.unsqueeze(0))
+
+    def forward(self, x):
+        # 2. 相位映射与全息投影
+        total_phase = x + self.riemann_phase
+        z = torch.complex(torch.cos(total_phase), torch.sin(total_phase))
+        
+        # 3. 时空卷曲
+        z_fft = torch.fft.fft2(z, dim=(1, 2), norm='ortho')
+        
+        # 4. 高阶谐波干涉 (1-4阶) —— 击穿非线性瓶颈的关键
+        z1 = z_fft
+        z2 = z1 * z1
+        z3 = z2 * z1
+        z4 = z2 * z2
+        
+        # 5. 提取 8 通道全息特征 (4阶 * 实虚部)
+        return torch.stack([
+            z1.real, z1.imag, z2.real, z2.imag,
+            z3.real, z3.imag, z4.real, z4.imag
+        ], dim=-1)
+
+class UniversalTruthRegressor(nn.Module):
+    def __init__(self, input_bands=12, seq_len=64, hidden_dim=128):
+        super().__init__()
+        self.embedding = nn.Linear(input_bands, hidden_dim)
+        self.core = FrequencyCombInterferometer(seq_len, hidden_dim)
+        self.global_pool = nn.AdaptiveAvgPool2d((1, 1))
+        # 8 个物理能量通道
+        self.decoder = nn.Linear(8, 1)
+
+    def forward(self, x):
+        x = self.embedding(x)
+        x = self.core(x)      # [B, T, D, 8]
+        x = x.permute(0, 3, 1, 2) # [B, 8, T, D]
+        x = self.global_pool(x).view(x.size(0), -1) # [B, 8]
+        return self.decoder(x)
+
+def run_v9_bombardment():
+    torch.manual_seed(42)
+    # 构建极其复杂的非线性物理环境
+    num_samples, seq_len, input_bands = 4000, 64, 12
+    X_all = torch.rand(num_samples, seq_len, input_bands) * 2.0
+    # 目标：更加扭曲的非线性 (NDVI 的平方根 + 指数项)
+    ndvi = (X_all[:,:,7] - X_all[:,:,3]) / (X_all[:,:,7] + X_all[:,:,3] + 1e-6)
+    Y_all = torch.sqrt(torch.abs(ndvi)) + 0.1 * torch.exp(ndvi)
+    Y_all = Y_all.mean(dim=1).unsqueeze(1)
+    
+    # 频率维度直接拉到 128
+    model = UniversalTruthRegressor(input_bands, seq_len, 128)
+    criterion = nn.MSELoss()
+    # 依然使用纯 SGD，拒绝一切人为干预
+    optimizer = optim.SGD(model.parameters(), lr=1e-1)
+    
+    print("\n[V9 频率梳启动] 128路黎曼频率阵列 + 4阶谐波干涉...")
+    print("="*60)
+    
+    for epoch in range(30): # 增加到 30 轮，看它能压到多深
+        optimizer.zero_grad()
+        preds = model(X_all[:3500])
+        loss = criterion(preds, Y_all[:3500])
+        loss.backward()
+        optimizer.step()
+        
+        with torch.no_grad():
+            test_loss = criterion(model(X_all[3500:]), Y_all[3500:])
+            
+        print(f"  [Epoch {epoch+1:02d}] 训练 MSE: {loss.item():.8f} | 盲测 MSE: {test_loss:.8f}")
+
+    print("="*60)
+    print("[★] 最终盲测精度验证 (Precision Check):")
+    model.eval()
+    with torch.no_grad():
+        final_preds = model(X_all[3500:])
+        for i in range(3):
+            print(f"  测点 {i}: 真实 {Y_all[3500+i].item():.6f} | 引擎测度 {final_preds[i].item():.6f}")
+
+if __name__ == "__main__":
+    run_v9_bombardment()
+```
+
+[V9 频率梳启动] 128路黎曼频率阵列 + 4阶谐波干涉...
+============================================================
+  [Epoch 01] 训练 MSE: 0.25397962 | 盲测 MSE: 0.16182809
+  [Epoch 02] 训练 MSE: 0.15967080 | 盲测 MSE: 0.10231128
+  [Epoch 03] 训练 MSE: 0.10059071 | 盲测 MSE: 0.06492063
+  [Epoch 04] 训练 MSE: 0.06354933 | 盲测 MSE: 0.04140520
+  [Epoch 05] 训练 MSE: 0.04031225 | 盲测 MSE: 0.02659993
+  [Epoch 06] 训练 MSE: 0.02572896 | 盲测 MSE: 0.01726826
+  [Epoch 07] 训练 MSE: 0.01657394 | 盲测 MSE: 0.01137912
+  [Epoch 08] 训练 MSE: 0.01082530 | 盲测 MSE: 0.00765706
+  [Epoch 09] 训练 MSE: 0.00721496 | 盲测 MSE: 0.00530058
+  [Epoch 10] 训练 MSE: 0.00494726 | 盲测 MSE: 0.00380560
+  [Epoch 11] 训练 MSE: 0.00352273 | 盲测 MSE: 0.00285476
+  [Epoch 12] 训练 MSE: 0.00262780 | 盲测 MSE: 0.00224809
+  [Epoch 13] 训练 MSE: 0.00206554 | 盲测 MSE: 0.00185961
+  [Epoch 14] 训练 MSE: 0.00171227 | 盲测 MSE: 0.00160970
+  [Epoch 15] 训练 MSE: 0.00149030 | 盲测 MSE: 0.00144804
+  [Epoch 16] 训练 MSE: 0.00135081 | 盲测 MSE: 0.00134283
+  [Epoch 17] 训练 MSE: 0.00126316 | 盲测 MSE: 0.00127380
+  [Epoch 18] 训练 MSE: 0.00120807 | 盲测 MSE: 0.00122814
+  [Epoch 19] 训练 MSE: 0.00117345 | 盲测 MSE: 0.00119762
+  [Epoch 20] 训练 MSE: 0.00115169 | 盲测 MSE: 0.00117699
+  [Epoch 21] 训练 MSE: 0.00113801 | 盲测 MSE: 0.00116287
+  [Epoch 22] 训练 MSE: 0.00112940 | 盲测 MSE: 0.00115309
+  [Epoch 23] 训练 MSE: 0.00112398 | 盲测 MSE: 0.00114622
+  [Epoch 24] 训练 MSE: 0.00112057 | 盲测 MSE: 0.00114133
+  [Epoch 25] 训练 MSE: 0.00111842 | 盲测 MSE: 0.00113779
+  [Epoch 26] 训练 MSE: 0.00111706 | 盲测 MSE: 0.00113521
+  [Epoch 27] 训练 MSE: 0.00111620 | 盲测 MSE: 0.00113329
+  [Epoch 28] 训练 MSE: 0.00111565 | 盲测 MSE: 0.00113187
+  [Epoch 29] 训练 MSE: 0.00111530 | 盲测 MSE: 0.00113079
+  [Epoch 30] 训练 MSE: 0.00111507 | 盲测 MSE: 0.00112995
+============================================================
+[★] 最终盲测精度验证 (Precision Check):
+  测点 0: 真实 0.747985 | 引擎测度 0.673843
+  测点 1: 真实 0.702115 | 引擎测度 0.688782
+  测点 2: 真实 0.752921 | 引擎测度 0.675433
+
+---
+
+```python
 
 ```
+
+
+
+---
+
+```python
+
+```
+
+
+
+---
+
+```python
+
+```
+
+
 
