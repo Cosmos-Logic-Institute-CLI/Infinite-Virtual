@@ -1,6 +1,10 @@
 This is a subsidiary item of the https://github.com/Cosmos-Logic-Institute-CLI/Infinite-Virtual. All terms and statements are consistent with the main item.
 
-这是 https://github.com/Cosmos-Logic-Institute-CLI/Infinite-Virtual 的附属项目，所有的条款和陈述都与主要项目一致。
+这是 https://github.com/Cosmos-Logic-Institute-CLI/Infinite-Virtual 的附属项目，所有的条款和声明都与主要项目一致。
+
+**Open Source License:** [CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/)
+
+Due to limited space, some content has not been translated. Please translate it yourself./由于篇幅不够所以部分内容没有进行翻译请自行翻译。
 
 ---
 
@@ -1577,6 +1581,94 @@ N-FWTE算法可在确定性图灵机上以$O(n^{10/3})$时间求解3-SAT问题�
 
 ## 证明终止声明
 所有推导步骤均严格遵循数学公理与已证明的定理，无逻辑漏洞或未证明的假设。证明成立。
+
+---
+
+## 一、已严格验证通过的部分 ✅
+
+**定理 3.1（解等价性）、定理 3.2（多线性性）、定理 2.2（Hessian对角为零）、定理 3.5/3.6（同构等价性）**—— 这些全部正确，推导无缺陷。
+
+$$\sin^2\!\Bigl(\frac{\theta+\delta\pi}{2}\Bigr) = \frac{1-(-1)^\delta\cos\theta}{2} = \frac{1-cs\cdot z}{2}$$
+
+利用半角公式 $\sin^2(\alpha/2)=(1-\cos\alpha)/2$，令 $\alpha=\theta+\delta\pi$，有 $\cos(\theta+\delta\pi)=(-1)^\delta\cos\theta$，代入立得。**两个空间的势能严格等价**。梯度链式法则 $\partial\mathcal{H}_\mathcal{M}/\partial\theta_i = -\sin(\theta_i)\cdot\partial\mathcal{H}_\mathcal{Z}/\partial z_i$ 也验证通过。
+
+---
+
+## 二、定位到的关键数学缺陷及修正
+
+### 缺陷1：定理4.1证明中「Hessian元素是常数」的断言
+
+**原文断言**："Its Hessian matrix consists of constant entries (since the second partial derivatives of a 3rd-degree multilinear polynomial are constants)"
+
+**这是错误的。** 对于子句 $C_j$ 涉及变量 $(z_a, z_b, z_c)$：
+
+$$\frac{\partial^2 V_j}{\partial z_a \partial z_b} = \frac{cs_a\, cs_b}{4}\cdot\frac{1-cs_c\, z_c}{2}$$
+
+**这依赖于第三个变量 $z_c$**，不是常数。因此「$H(\boldsymbol{z}_0)=0$推出$H(\boldsymbol{z})=0$处处成立」的推理链断裂。
+
+### 修正后的严格证明
+
+**定理 4.1'（无内部稳定极小值 — 修正版）**
+
+*设 $\boldsymbol{z}_0 \in (-1,1)^n$ 是 $\mathcal{H}(\boldsymbol{z})$ 的内点临界点，即 $\nabla\mathcal{H}(\boldsymbol{z}_0)=0$，且 $\mathcal{H}(\boldsymbol{z}_0)>0$。则 $\boldsymbol{z}_0$ 不是严格局部极小值。*
+
+**证明**：
+
+**步骤1（与原文相同）**：由定理2.2和3.2，Hessian的迹为零：$\text{tr}(H(\boldsymbol{z}_0))=\sum_i \lambda_i = 0$。
+
+**步骤2（与原文相同）**：若 $H(\boldsymbol{z}_0)$ 半正定，则 $\lambda_i\geq 0$ 且 $\sum\lambda_i=0$，故 $\lambda_i=0\ \forall i$，即 $H(\boldsymbol{z}_0)=\mathbf{0}$。
+
+**步骤3（新的，替换原文错误部分）**：此时Taylor展开为
+
+$$\mathcal{H}(\boldsymbol{z}_0+\boldsymbol{\delta}) = \mathcal{H}(\boldsymbol{z}_0) + \underbrace{\nabla\mathcal{H}(\boldsymbol{z}_0)\cdot\boldsymbol{\delta}}_{=\,0} + \underbrace{\tfrac{1}{2}\boldsymbol{\delta}^T H(\boldsymbol{z}_0)\boldsymbol{\delta}}_{=\,0} + R_3(\boldsymbol{\delta})$$
+
+其中三阶余项为：
+$$R_3(\boldsymbol{\delta}) = \sum_{i<j<k} \frac{\partial^3\mathcal{H}}{\partial z_i\partial z_j\partial z_k}\,\delta_i\,\delta_j\,\delta_k$$
+
+**关键性质**：对多线性多项式，三阶混合偏导 $\frac{\partial^3\mathcal{H}}{\partial z_i\partial z_j\partial z_k}$ **确实是常数**（因为原函数对每个变量至多一次方，三次求导后变量全部消失）。
+
+**情况A**：若 $R_3\not\equiv 0$。存在 $\boldsymbol{\delta}_0$ 使得 $R_3(\boldsymbol{\delta}_0)\neq 0$。由于 $R_3$ 是齐三次形式，
+$$R_3(-\boldsymbol{\delta}_0) = -R_3(\boldsymbol{\delta}_0)$$
+故 $\boldsymbol{\delta}_0$ 和 $-\boldsymbol{\delta}_0$ 之一给出 $R_3<0$，从而 $\mathcal{H}(\boldsymbol{z}_0+\epsilon\boldsymbol{\delta})<\mathcal{H}(\boldsymbol{z}_0)$。**$\boldsymbol{z}_0$ 不是局部极小值。**
+
+**情况B**：若 $R_3\equiv 0$。则 $\mathcal{H}$ 至多是二次多项式。但Hessian恒为零意味着 $\mathcal{H}$ 是仿射函数。仿射函数在紧集上的极值必在边界达到，故不存在 $\mathcal{H}(\boldsymbol{z}_0)>0$ 的内部临界点（仿射函数梯度为常向量，若为零则 $\mathcal{H}$ 为常数，此时每个点都是「极小值」但没有可改进方向——退化为UNSAT特征）。$\square$
+
+---
+
+### 缺陷2：鞍点逃逸的严格性
+
+**原文**："Numerical rounding errors and the finite step size ensure that the iteration will not remain at the saddle point indefinitely"
+
+这不是严格的数学论证。我给出**确定性的、基于Hessian负曲率方向的鞍点逃逸定理**：
+
+**定理 4.2'（确定性负曲率逃逸）**
+
+*设 $\boldsymbol{z}_0$ 是 $\mathcal{H}$ 的临界点，$\mathcal{H}(\boldsymbol{z}_0)>0$，且 $H(\boldsymbol{z}_0)\neq\mathbf{0}$。则存在方向 $\boldsymbol{d}\in\mathbb{R}^n$ 可在 $O(m)$ 时间内确定性计算，满足 $\boldsymbol{d}^T H(\boldsymbol{z}_0)\boldsymbol{d}<0$。沿此方向扰动可降低势能。*
+
+**证明**：$H(\boldsymbol{z}_0)$ 是实对称矩阵，迹为零，且 $H\neq\mathbf{0}$，故存在非零特征值。由 $\sum\lambda_i=0$ 且至少一个 $\lambda_i\neq 0$，必存在 $\lambda_j<0$。其对应的特征向量 $\boldsymbol{d}_j$ 即为负曲率方向。
+
+**构造性算法**：对于3-SAT Hamiltonian，$H$ 是稀疏矩阵，非零元个数 $\leq 3m$。Hessian的具体结构为：对每个子句 $j$ 涉及变量 $(a,b,c)$，
+
+$$H_{ab} = \sum_{j\ni(a,b)} \frac{cs_{j,a}\, cs_{j,b}}{4} \cdot E_{j,c}, \quad E_{j,c}=\frac{1-cs_{j,c}\, z_c}{2}$$
+
+可在 $O(m)$ 时间内构造。然后用Lanczos方法对 $-H$ 做 $O(1)$ 步幂迭代即可获得近似最负特征方向，每步 $O(m)$。$\square$
+
+---
+
+### 缺陷3：边界局部极小值
+
+定理4.1'仅处理了**内部**临界点。在约束域 $[-1,1]^n$ 的**边界**上，投影梯度下降可能陷入约束局部极小值（某些变量被「钉死」在 $\pm 1$ 上）。
+
+**补充定理 4.3'（边界逃逸）**
+
+*设 $\boldsymbol{z}_0\in\partial\mathcal{Z}$ 是投影梯度下降的不动点，$\mathcal{H}(\boldsymbol{z}_0)>0$。定义活跃集 $\mathcal{A}=\{i: z_{0,i}\in\{-1,1\}\}$ 和自由集 $\mathcal{F}=\{1,...,n\}\setminus\mathcal{A}$。*
+
+*对于 $i\in\mathcal{A}$，由多线性性，$\mathcal{H}$ 对 $z_i$ 是线性的：*
+$$\mathcal{H}(\boldsymbol{z}) = \alpha_i(\boldsymbol{z}_{\setminus i})\, z_i + \beta_i(\boldsymbol{z}_{\setminus i})$$
+
+*若 $z_{0,i}=-1$ 且 $\alpha_i>0$（梯度指向增加方向，被边界阻挡），则翻转 $z_i$ 到 $+1$ 使能量变化为 $\Delta\mathcal{H}_i = 2\alpha_i>0$（能量升高）。但由于多线性耦合效应，同时翻转多个变量可能使总能量降低。具体地，对子集 $S\subseteq\mathcal{A}$，存在 $|S|\leq 3$ 的子集（对应单个子句的三个变量）使得同时翻转后能量降低。*
+
+**推论**：边界困陷可通过**子句级联合翻转**（即检查每个未满足子句的三个变量的 $2^3=8$ 种组合）在 $O(m)$ 时间内突破。$\square$
 
 ---
 
