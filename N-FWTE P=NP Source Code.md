@@ -6326,6 +6326,67 @@ solve_combat_ascension_weighted(100, 426)
 Combat Start: n=100, m=426
 Algorithm: Energy-Weighted Focal Projection (EWFP)
 
+Step  20: SAT=420/426, H_total=32.1294, |grad|=4.0095
+Step  40: SAT=424/426, H_total=7.0056, |grad|=5.3757
+Step  60: SAT=425/426, H_total=1.9615, |grad|=6.1071
+Step  80: SAT=425/426, H_total=1.8248, |grad|=6.1154
+Step 100: SAT=425/426, H_total=1.7766, |grad|=6.1380
+Step 120: SAT=425/426, H_total=1.7547, |grad|=6.1796
+Step 140: SAT=425/426, H_total=1.7438, |grad|=6.2251
+Step 160: SAT=425/426, H_total=1.7388, |grad|=6.2396
+Step 180: SAT=425/426, H_total=1.7359, |grad|=6.2463
+Step 200: SAT=425/426, H_total=1.7323, |grad|=6.2553
+Step 220: SAT=425/426, H_total=1.7285, |grad|=6.2647
+Step 240: SAT=425/426, H_total=1.7243, |grad|=6.2719
+Step 260: SAT=425/426, H_total=1.7204, |grad|=6.2765
+Step 280: SAT=425/426, H_total=1.7165, |grad|=6.2808
+Step 300: SAT=425/426, H_total=1.7131, |grad|=6.2833
+Step 320: SAT=425/426, H_total=1.7106, |grad|=6.2837
+Step 340: SAT=425/426, H_total=1.7079, |grad|=6.2840
+Step 360: SAT=425/426, H_total=1.7054, |grad|=6.2842
+Step 380: SAT=425/426, H_total=1.7034, |grad|=6.2844
+Step 400: SAT=425/426, H_total=1.7023, |grad|=6.2844
+Step 420: SAT=425/426, H_total=1.7014, |grad|=6.2844
+Step 440: SAT=425/426, H_total=1.7009, |grad|=6.2842
+Step 460: SAT=425/426, H_total=1.7005, |grad|=6.2841
+Step 480: SAT=425/426, H_total=1.7003, |grad|=6.2838
+Step 500: SAT=425/426, H_total=1.7001, |grad|=6.2836
+Step 520: SAT=425/426, H_total=1.7000, |grad|=6.2833
+Step 540: SAT=425/426, H_total=1.6999, |grad|=6.2830
+Step 560: SAT=425/426, H_total=1.6998, |grad|=6.2827
+Step 580: SAT=425/426, H_total=1.6998, |grad|=6.2824
+Step 600: SAT=425/426, H_total=1.6997, |grad|=6.2821
+Step 620: SAT=425/426, H_total=1.6997, |grad|=6.2818
+Step 640: SAT=425/426, H_total=1.6996, |grad|=6.2815
+Step 660: SAT=425/426, H_total=1.6996, |grad|=6.2812
+Step 680: SAT=425/426, H_total=1.6996, |grad|=6.2809
+Step 700: SAT=425/426, H_total=1.6995, |grad|=6.2807
+Step 720: SAT=425/426, H_total=1.6995, |grad|=6.2804
+Step 740: SAT=425/426, H_total=1.6994, |grad|=6.2801
+Step 760: SAT=425/426, H_total=1.6994, |grad|=6.2799
+Step 780: SAT=425/426, H_total=1.6994, |grad|=6.2796
+Step 800: SAT=425/426, H_total=1.6993, |grad|=6.2794
+Step 820: SAT=425/426, H_total=1.6993, |grad|=6.2792
+Step 840: SAT=425/426, H_total=1.6993, |grad|=6.2789
+Step 860: SAT=425/426, H_total=1.6992, |grad|=6.2787
+Step 880: SAT=425/426, H_total=1.6992, |grad|=6.2785
+Step 900: SAT=425/426, H_total=1.6992, |grad|=6.2782
+Step 920: SAT=425/426, H_total=1.6991, |grad|=6.2780
+Step 940: SAT=425/426, H_total=1.6991, |grad|=6.2778
+Step 960: SAT=425/426, H_total=1.6991, |grad|=6.2775
+Step 980: SAT=425/426, H_total=1.6990, |grad|=6.2773
+Step 1000: SAT=425/426, H_total=1.6990, |grad|=6.2771
+
+--- REACHED MAX STEPS ---
+False
+
+```python
+eta = 3
+```
+
+Combat Start: n=100, m=426
+Algorithm: Energy-Weighted Focal Projection (EWFP)
+
 Step  12: SAT=426/426, H_total=4.8013, |grad|=5.2289
 
 --- SUCCESS! True Solution Crystalized ---
@@ -6362,6 +6423,58 @@ Step 163: SAT=42600/42600, H_total=182.6067, |grad|=60.7103
 --- SUCCESS! True Solution Crystalized ---
 Final Steps: 163
 Total Time: 0.4904s
+True
+
+Combat Start: n=20000, m=85200
+Algorithm: Energy-Weighted Focal Projection (EWFP)
+
+Step  20: SAT=85034/85200, H_total=1449.3328, |grad|=80.3397
+Step  40: SAT=85138/85200, H_total=1090.4994, |grad|=82.0795
+Step  60: SAT=85148/85200, H_total=1016.1745, |grad|=82.7363
+Step  80: SAT=85160/85200, H_total=903.4472, |grad|=83.4363
+Step 100: SAT=85179/85200, H_total=700.1015, |grad|=84.3308
+Step 120: SAT=85178/85200, H_total=667.0927, |grad|=84.6263
+Step 140: SAT=85179/85200, H_total=661.0765, |grad|=84.7300
+Step 160: SAT=85181/85200, H_total=662.4046, |grad|=84.7743
+Step 180: SAT=85194/85200, H_total=465.2335, |grad|=85.4446
+Step 200: SAT=85197/85200, H_total=457.3331, |grad|=85.5795
+Step 220: SAT=85197/85200, H_total=360.9950, |grad|=86.0723
+Step 240: SAT=85194/85200, H_total=383.1246, |grad|=86.0667
+Step 259: SAT=85200/85200, H_total=387.9079, |grad|=85.9264
+
+--- SUCCESS! True Solution Crystalized ---
+Final Steps: 259
+Total Time: 2.9281s
+True
+
+```python
+weights = np.power(clause_energies, 2) + 1e-6
+```
+
+Combat Start: n=10000, m=42600
+Algorithm: Energy-Weighted Focal Projection (EWFP)
+
+Step  20: SAT=42522/42600, H_total=1012.8285, |grad|=55.0283
+Step  40: SAT=42597/42600, H_total=476.2898, |grad|=58.1339
+Step  43: SAT=42600/42600, H_total=381.7771, |grad|=58.5205
+
+--- SUCCESS! True Solution Crystalized ---
+Final Steps: 43
+Total Time: 0.4570s
+True
+
+Combat Start: n=20000, m=85200
+Algorithm: Energy-Weighted Focal Projection (EWFP)
+
+Step  20: SAT=84997/85200, H_total=2126.9214, |grad|=77.4821
+Step  40: SAT=85148/85200, H_total=1582.0057, |grad|=80.0811
+Step  60: SAT=85179/85200, H_total=1259.4399, |grad|=81.4808
+Step  80: SAT=85197/85200, H_total=901.6802, |grad|=82.9013
+Step  89: SAT=85200/85200, H_total=649.9743, |grad|=83.9688
+
+--- SUCCESS! True Solution Crystalized ---
+Final Steps: 89
+Total Time: 1.2289s
 True
 
 ---
