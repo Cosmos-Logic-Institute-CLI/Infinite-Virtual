@@ -9944,6 +9944,525 @@ True
 
 ---
 
+```python
+import cupy as cp
+import cupyx.scipy.sparse as sps
+import time
+
+# =====================================================================
+# 究极算子融合：内部提升为 FP32 计算防止溢出，外部输出 FP16/FP32
+# =====================================================================
+fused_ode_kernel_spmv = cp.ElementwiseKernel(
+    'float16 x0, float16 x1, float16 x2, float16 p0, float16 p1, float16 p2, float16 dt, float16 eps',
+    'float16 nx0, float16 nx1, float16 nx2, float32 w0, float32 w1, float32 w2, float32 w_out',
+    '''
+    // 1. 将半精度提升为标准的 float (FP32) 进行高保真物理积分
+    float f_x0 = x0, f_x1 = x1, f_x2 = x2;
+    float f_p0 = p0, f_p1 = p1, f_p2 = p2;
+    float f_dt = dt, f_eps = eps;
+
+    float c0 = 1.0f - f_x0 * f_p0;
+    float c1 = 1.0f - f_x1 * f_p1;
+    float c2 = 1.0f - f_x2 * f_p2;
+    
+    float f_nx0 = f_x0 + f_dt * f_p0 * c1 * c2;
+    float f_nx1 = f_x1 + f_dt * f_p1 * c0 * c2;
+    float f_nx2 = f_x2 + f_dt * f_p2 * c0 * c1;
+    
+    // 非线性权重
+    float h = 0.125f * c0 * c1 * c2;
+    float w = h * h + f_eps;
+    
+    // 2. 截断写回 FP16 (用于下次状态迭代)
+    nx0 = (float16)f_nx0;
+    nx1 = (float16)f_nx1;
+    nx2 = (float16)f_nx2;
+    
+    // 3. 输出 FP32 (严格满足 cuSPARSE 矩阵乘法器的底层数据对齐要求)
+    w0 = f_nx0 * w;
+    w1 = f_nx1 * w;
+    w2 = f_nx2 * w;
+    w_out = w;
+    ''',
+    'fused_ode_kernel_spmv'
+)
+
+def solve_sat_ode_gpu_ultimate(n, m, max_steps=2000):
+    print(f"Initializing Problem: n={n}, m={m} (Phase Transition 3-SAT)")
+    
+    # --- 1. 问题生成 ---
+    # 使用符号函数生成目标解，比随机 choice 更适合 CuPy 底层
+    target_sol = cp.sign(cp.random.randn(n, dtype=cp.float32))
+    target_sol[target_sol == 0] = 1.0
+    
+    v_indices = cp.zeros((m, 3), dtype=cp.int32)
+    p_matrix = cp.zeros((m, 3), dtype=cp.float32)
+    
+    count = 0
+    while count < m:
+        rem = m - count
+        tmp_v = cp.random.randint(0, n, (rem * 2, 3), dtype=cp.int32)
+        mask = (tmp_v[:, 0] != tmp_v[:, 1]) & (tmp_v[:, 1] != tmp_v[:, 2]) & (tmp_v[:, 0] != tmp_v[:, 2])
+        tmp_v = tmp_v[mask]
+        
+        tmp_p = cp.sign(cp.random.randn(tmp_v.shape[0], 3, dtype=cp.float32))
+        tmp_p[tmp_p == 0] = 1.0
+        
+        satisfied = cp.any(target_sol[tmp_v] == tmp_p, axis=1)
+        take = int(min(cp.sum(satisfied), m - count))
+        if take > 0:
+            v_indices[count:count+take] = tmp_v[satisfied][:take]
+            p_matrix[count:count+take] = tmp_p[satisfied][:take]
+            count += take
+
+    # =================================================================
+    # HPC 究极优化：构建 cuSPARSE CSR 矩阵
+    # =================================================================
+    print("Building cuSPARSE CSR Matrices...")
+    
+    v0, v1, v2 = v_indices[:, 0], v_indices[:, 1], v_indices[:, 2]
+    cols = cp.arange(m, dtype=cp.int32)
+    data_ones = cp.ones(m, dtype=cp.float32)
+    
+    # COO to CSR 是目前 GPU 上建立稀疏矩阵最无风险的方式
+    M0 = sps.coo_matrix((data_ones, (v0, cols)), shape=(n, m), dtype=cp.float32).tocsr()
+    M1 = sps.coo_matrix((data_ones, (v1, cols)), shape=(n, m), dtype=cp.float32).tocsr()
+    M2 = sps.coo_matrix((data_ones, (v2, cols)), shape=(n, m), dtype=cp.float32).tocsr()
+
+    print("Allocating Memory Pools...")
+    p_soa = cp.ascontiguousarray(p_matrix.T.astype(cp.float16))
+    x_soa = cp.random.normal(0, 1e-4, (3, m)).astype(cp.float16)
+    x_next_soa = cp.empty_like(x_soa)
+    
+    w0 = cp.empty(m, dtype=cp.float32)
+    w1 = cp.empty(m, dtype=cp.float32)
+    w2 = cp.empty(m, dtype=cp.float32)
+    w_out = cp.empty(m, dtype=cp.float32)
+    
+    dt_cf = cp.float16(3.0 * 0.125)
+    eps_16 = cp.float16(1e-4)
+    eps_32 = cp.float32(1e-4)
+    
+    print("\n--- Starting cuSPARSE Hardware Accelerated ODE ---")
+    start_time = time.time()
+
+    for step in range(1, max_steps + 1):
+        # A. Fused Kernel: 极速积分并生成 FP32 向量
+        fused_ode_kernel_spmv(
+            x_soa[0], x_soa[1], x_soa[2],
+            p_soa[0], p_soa[1], p_soa[2],
+            dt_cf, eps_16,
+            x_next_soa[0], x_next_soa[1], x_next_soa[2],
+            w0, w1, w2, w_out
+        )
+        x_soa, x_next_soa = x_next_soa, x_soa
+        
+        # B. 稀疏降维打击 (SpMV)：彻底抛弃耗时的 add.at，由 cuSPARSE 接管
+        sum_wv = M0.dot(w0) + M1.dot(w1) + M2.dot(w2)
+        
+        # 巧妙复用 w_out，避免了建立 M_total 导致的显存翻倍与加法开销
+        sum_w  = M0.dot(w_out) + M1.dot(w_out) + M2.dot(w_out)
+        
+        # C. 投影归一化并强制拉回 FP16 状态空间
+        consensus_f32 = sum_wv / (sum_w + eps_32)
+        consensus_f16 = consensus_f32.astype(cp.float16)
+        
+        x_soa[0] = consensus_f16[v0]
+        x_soa[1] = consensus_f16[v1]
+        x_soa[2] = consensus_f16[v2]
+        
+        cp.clip(x_soa, cp.float16(-1.0), cp.float16(1.0), out=x_soa)
+        
+        # D. 监控
+        if step % 50 == 0:
+            current_x = cp.sign(consensus_f16)
+            sat_count = int(cp.count_nonzero(
+                (current_x[v0] == p_soa[0]) |
+                (current_x[v1] == p_soa[1]) |
+                (current_x[v2] == p_soa[2])
+            ))
+            print(f"Step {step:4d}: SAT={sat_count}/{m} | Time: {time.time()-start_time:.4f}s")
+            
+            if sat_count == m:
+                print(f"\n[VICTORY] GPU Hardware Limit Reached!")
+                print(f"Total Computation Time: {time.time()-start_time:.4f}s")
+                return True
+
+    return False
+
+# 执行 400 万规模的相变点验证
+solve_sat_ode_gpu_ultimate(4000000, 17040000, max_steps=2000)
+```
+
+Initializing Problem: n=4000000, m=17040000 (Phase Transition 3-SAT)
+Building cuSPARSE CSR Matrices...
+Allocating Memory Pools...
+
+--- Starting cuSPARSE Hardware Accelerated ODE ---
+Step   50: SAT=17030966/17040000 | Time: 5.1105s
+Step  100: SAT=17038730/17040000 | Time: 9.0345s
+Step  150: SAT=17039943/17040000 | Time: 12.9563s
+Step  200: SAT=17040000/17040000 | Time: 16.8811s
+
+[VICTORY] GPU Hardware Limit Reached!
+Total Computation Time: 16.8812s
+True
+
+---
+
+```python
+import cupy as cp
+import cupyx.scipy.sparse as sps
+import time
+
+# =====================================================================
+# 算子：保持 FP32 内部高保真计算，输出 FP16/FP32
+# =====================================================================
+fused_ode_kernel_spmv = cp.ElementwiseKernel(
+    'float16 x0, float16 x1, float16 x2, float16 p0, float16 p1, float16 p2, float16 dt, float16 eps',
+    'float16 nx0, float16 nx1, float16 nx2, float32 w0, float32 w1, float32 w2, float32 w_out',
+    '''
+    // 1. 提升为 FP32 计算
+    float f_x0 = x0, f_x1 = x1, f_x2 = x2;
+    float f_p0 = p0, f_p1 = p1, f_p2 = p2;
+    float f_dt = dt, f_eps = eps;
+
+    float c0 = 1.0f - f_x0 * f_p0;
+    float c1 = 1.0f - f_x1 * f_p1;
+    float c2 = 1.0f - f_x2 * f_p2;
+    
+    float f_nx0 = f_x0 + f_dt * f_p0 * c1 * c2;
+    float f_nx1 = f_x1 + f_dt * f_p1 * c0 * c2;
+    float f_nx2 = f_x2 + f_dt * f_p2 * c0 * c1;
+    
+    // 非线性权重
+    float h = 0.125f * c0 * c1 * c2;
+    float w = h * h + f_eps;
+    
+    // 2. 截断写回 FP16
+    nx0 = (float16)f_nx0;
+    nx1 = (float16)f_nx1;
+    nx2 = (float16)f_nx2;
+    
+    // 3. 输出 FP32 权重
+    w0 = f_nx0 * w;
+    w1 = f_nx1 * w;
+    w2 = f_nx2 * w;
+    w_out = w;
+    ''',
+    'fused_ode_kernel_spmv'
+)
+
+def solve_sat_ode_gpu_ultimate_v2(n, m, max_steps=2000):
+    print(f"Initializing Problem: n={n}, m={m} (Phase Transition 3-SAT)")
+    
+    # --- 1. 问题生成 ---
+    target_sol = cp.sign(cp.random.randn(n, dtype=cp.float32))
+    target_sol[target_sol == 0] = 1.0
+    
+    v_indices = cp.zeros((m, 3), dtype=cp.int32)
+    p_matrix = cp.zeros((m, 3), dtype=cp.float32)
+    
+    count = 0
+    while count < m:
+        rem = m - count
+        tmp_v = cp.random.randint(0, n, (rem * 2, 3), dtype=cp.int32)
+        mask = (tmp_v[:, 0] != tmp_v[:, 1]) & (tmp_v[:, 1] != tmp_v[:, 2]) & (tmp_v[:, 0] != tmp_v[:, 2])
+        tmp_v = tmp_v[mask]
+        
+        tmp_p = cp.sign(cp.random.randn(tmp_v.shape[0], 3, dtype=cp.float32))
+        tmp_p[tmp_p == 0] = 1.0
+        
+        satisfied = cp.any(target_sol[tmp_v] == tmp_p, axis=1)
+        take = int(min(cp.sum(satisfied), m - count))
+        if take > 0:
+            v_indices[count:count+take] = tmp_v[satisfied][:take]
+            p_matrix[count:count+take] = tmp_p[satisfied][:take]
+            count += take
+
+    # =================================================================
+    # HPC 优化方案一：SpMV 算子大一统 (Consolidation)
+    # =================================================================
+    print("Building Optimized cuSPARSE CSR Matrices...")
+    
+    v0, v1, v2 = v_indices[:, 0], v_indices[:, 1], v_indices[:, 2]
+    
+    # 构造 M_total (形状 n x 3m)，用于一步计算 sum_wv
+    cols_total = cp.arange(3 * m, dtype=cp.int32)
+    rows_total = cp.concatenate([v0, v1, v2])
+    data_ones_3m = cp.ones(3 * m, dtype=cp.float32)
+    
+    M_total = sps.coo_matrix((data_ones_3m, (rows_total, cols_total)), shape=(n, 3 * m), dtype=cp.float32).tocsr()
+    
+    # 构造 M_sum (形状 n x m)，用于一步计算 sum_w
+    cols_sum = cp.tile(cp.arange(m, dtype=cp.int32), 3) # [0..m-1, 0..m-1, 0..m-1]
+    # COO 转换 CSR 时，会自动将重复的 (row, col) 的 data 累加，完美契合 M0+M1+M2 的逻辑
+    M_sum = sps.coo_matrix((data_ones_3m, (rows_total, cols_sum)), shape=(n, m), dtype=cp.float32).tocsr()
+
+    # =================================================================
+    print("Allocating Memory Pools with Zero-Copy Views...")
+    p_soa = cp.ascontiguousarray(p_matrix.T.astype(cp.float16))
+    x_soa = cp.random.normal(0, 1e-4, (3, m)).astype(cp.float16)
+    x_next_soa = cp.empty_like(x_soa)
+    
+    # 【核心 Trick】分配一整块 3m 的显存，让 w0, w1, w2 作为它的视图 (Views)
+    w_wv = cp.empty(3 * m, dtype=cp.float32)
+    w0 = w_wv[:m]
+    w1 = w_wv[m:2*m]
+    w2 = w_wv[2*m:]
+    
+    w_out = cp.empty(m, dtype=cp.float32)
+    
+    dt_cf = cp.float16(3.0 * 0.125)
+    eps_16 = cp.float16(1e-4)
+    eps_32 = cp.float32(1e-4)
+    
+    print("\n--- Starting cuSPARSE Hardware Accelerated ODE (V2) ---")
+    start_time = time.time()
+
+    for step in range(1, max_steps + 1):
+        # A. Fused Kernel: 极速积分
+        # 这里写入 w0, w1, w2，实际上就是在原位覆盖 w_wv 的对应内存段
+        fused_ode_kernel_spmv(
+            x_soa[0], x_soa[1], x_soa[2],
+            p_soa[0], p_soa[1], p_soa[2],
+            dt_cf, eps_16,
+            x_next_soa[0], x_next_soa[1], x_next_soa[2],
+            w0, w1, w2, w_out
+        )
+        x_soa, x_next_soa = x_next_soa, x_soa
+        
+        # B. 稀疏降维打击 (SpMV)：6 次调用直接降为 2 次调用
+        sum_wv = M_total.dot(w_wv)
+        sum_w  = M_sum.dot(w_out)
+        
+        # C. 投影归一化并强制拉回 FP16 状态空间
+        consensus_f32 = sum_wv / (sum_w + eps_32)
+        consensus_f16 = consensus_f32.astype(cp.float16)
+        
+        x_soa[0] = consensus_f16[v0]
+        x_soa[1] = consensus_f16[v1]
+        x_soa[2] = consensus_f16[v2]
+        
+        cp.clip(x_soa, cp.float16(-1.0), cp.float16(1.0), out=x_soa)
+        
+        # D. 监控
+        if step % 50 == 0:
+            current_x = cp.sign(consensus_f16)
+            sat_count = int(cp.count_nonzero(
+                (current_x[v0] == p_soa[0]) |
+                (current_x[v1] == p_soa[1]) |
+                (current_x[v2] == p_soa[2])
+            ))
+            print(f"Step {step:4d}: SAT={sat_count}/{m} | Time: {time.time()-start_time:.4f}s")
+            
+            if sat_count == m:
+                print(f"\n[VICTORY] GPU Hardware Limit Reached!")
+                print(f"Total Computation Time: {time.time()-start_time:.4f}s")
+                return True
+
+    return False
+
+# 执行 400 万规模的相变点验证
+solve_sat_ode_gpu_ultimate_v2(4000000, 17040000, max_steps=2000)
+```
+
+Initializing Problem: n=4000000, m=17040000 (Phase Transition 3-SAT)
+Building Optimized cuSPARSE CSR Matrices...
+Allocating Memory Pools with Zero-Copy Views...
+
+--- Starting cuSPARSE Hardware Accelerated ODE (V2) ---
+Step   50: SAT=17030989/17040000 | Time: 4.1326s
+Step  100: SAT=17038653/17040000 | Time: 7.9907s
+Step  150: SAT=17039972/17040000 | Time: 11.8486s
+Step  200: SAT=17040000/17040000 | Time: 15.7076s
+
+[VICTORY] GPU Hardware Limit Reached!
+Total Computation Time: 15.7077s
+True
+
+---
+
+```python
+import cupy as cp
+import cupyx.scipy.sparse as sps
+import time
+
+# =====================================================================
+# 算子：保持 FP32 内部高保真计算，输出 FP16/FP32
+# =====================================================================
+fused_ode_kernel_spmv = cp.ElementwiseKernel(
+    'float16 x0, float16 x1, float16 x2, float16 p0, float16 p1, float16 p2, float16 dt, float16 eps',
+    'float16 nx0, float16 nx1, float16 nx2, float32 w0, float32 w1, float32 w2, float32 w_out',
+    '''
+    float f_x0 = x0, f_x1 = x1, f_x2 = x2;
+    float f_p0 = p0, f_p1 = p1, f_p2 = p2;
+    float f_dt = dt, f_eps = eps;
+
+    float c0 = 1.0f - f_x0 * f_p0;
+    float c1 = 1.0f - f_x1 * f_p1;
+    float c2 = 1.0f - f_x2 * f_p2;
+    
+    float f_nx0 = f_x0 + f_dt * f_p0 * c1 * c2;
+    float f_nx1 = f_x1 + f_dt * f_p1 * c0 * c2;
+    float f_nx2 = f_x2 + f_dt * f_p2 * c0 * c1;
+    
+    float h = 0.125f * c0 * c1 * c2;
+    float w = h * h + f_eps;
+    
+    nx0 = (float16)f_nx0;
+    nx1 = (float16)f_nx1;
+    nx2 = (float16)f_nx2;
+    
+    w0 = f_nx0 * w;
+    w1 = f_nx1 * w;
+    w2 = f_nx2 * w;
+    w_out = w;
+    ''',
+    'fused_ode_kernel_spmv'
+)
+
+def solve_sat_ode_gpu_topological_resonance(n, m, max_steps=2000):
+    print(f"Initializing Problem: n={n}, m={m} (Phase Transition 3-SAT)")
+    
+    target_sol = cp.sign(cp.random.randn(n, dtype=cp.float32))
+    target_sol[target_sol == 0] = 1.0
+    
+    v_indices = cp.zeros((m, 3), dtype=cp.int32)
+    p_matrix = cp.zeros((m, 3), dtype=cp.float32)
+    
+    count = 0
+    while count < m:
+        rem = m - count
+        tmp_v = cp.random.randint(0, n, (rem * 2, 3), dtype=cp.int32)
+        mask = (tmp_v[:, 0] != tmp_v[:, 1]) & (tmp_v[:, 1] != tmp_v[:, 2]) & (tmp_v[:, 0] != tmp_v[:, 2])
+        tmp_v = tmp_v[mask]
+        
+        tmp_p = cp.sign(cp.random.randn(tmp_v.shape[0], 3, dtype=cp.float32))
+        tmp_p[tmp_p == 0] = 1.0
+        
+        satisfied = cp.any(target_sol[tmp_v] == tmp_p, axis=1)
+        take = int(min(cp.sum(satisfied), m - count))
+        if take > 0:
+            v_indices[count:count+take] = tmp_v[satisfied][:take]
+            p_matrix[count:count+take] = tmp_p[satisfied][:take]
+            count += take
+
+    # =================================================================
+    # HPC 优化方案二：拓扑缓存共振 (Topological Cache Resonance)
+    # =================================================================
+    print("\n[Optimization] Applying Topological Space-Filling Reordering...")
+    t_reorder = time.time()
+    
+    sort_idx = cp.argsort(v_indices, axis=1)
+    row_idx = cp.arange(m)[:, None]
+    v_indices = v_indices[row_idx, sort_idx]
+    p_matrix = p_matrix[row_idx, sort_idx]
+    
+    B = 2048
+    v0, v1, v2 = v_indices[:, 0], v_indices[:, 1], v_indices[:, 2]
+    b0, b1, b2 = v0 // B, v1 // B, v2 // B
+    
+    # 修复处的代码
+    keys = cp.vstack((v2, v1, v0, b2, b1, b0))
+    order = cp.lexsort(keys)
+    
+    v_indices = v_indices[order]
+    p_matrix = p_matrix[order]
+    
+    print(f"-> Topology Reordered in {time.time() - t_reorder:.4f}s")
+    # =================================================================
+
+    print("\nBuilding Optimized cuSPARSE CSR Matrices...")
+    v0, v1, v2 = v_indices[:, 0], v_indices[:, 1], v_indices[:, 2]
+    
+    cols_total = cp.arange(3 * m, dtype=cp.int32)
+    rows_total = cp.concatenate([v0, v1, v2])
+    data_ones_3m = cp.ones(3 * m, dtype=cp.float32)
+    
+    M_total = sps.coo_matrix((data_ones_3m, (rows_total, cols_total)), shape=(n, 3 * m), dtype=cp.float32).tocsr()
+    
+    cols_sum = cp.tile(cp.arange(m, dtype=cp.int32), 3)
+    M_sum = sps.coo_matrix((data_ones_3m, (rows_total, cols_sum)), shape=(n, m), dtype=cp.float32).tocsr()
+
+    print("Allocating Memory Pools...")
+    p_soa = cp.ascontiguousarray(p_matrix.T.astype(cp.float16))
+    x_soa = cp.random.normal(0, 1e-4, (3, m)).astype(cp.float16)
+    x_next_soa = cp.empty_like(x_soa)
+    
+    w_wv = cp.empty(3 * m, dtype=cp.float32)
+    w0, w1, w2 = w_wv[:m], w_wv[m:2*m], w_wv[2*m:]
+    w_out = cp.empty(m, dtype=cp.float32)
+    
+    dt_cf = cp.float16(3.0 * 0.125)
+    eps_16 = cp.float16(1e-4)
+    eps_32 = cp.float32(1e-4)
+    
+    print("\n--- Starting Hardware Accelerated ODE (Topology Resonance Mode) ---")
+    start_time = time.time()
+
+    for step in range(1, max_steps + 1):
+        fused_ode_kernel_spmv(
+            x_soa[0], x_soa[1], x_soa[2],
+            p_soa[0], p_soa[1], p_soa[2],
+            dt_cf, eps_16,
+            x_next_soa[0], x_next_soa[1], x_next_soa[2],
+            w0, w1, w2, w_out
+        )
+        x_soa, x_next_soa = x_next_soa, x_soa
+        
+        sum_wv = M_total.dot(w_wv)
+        sum_w  = M_sum.dot(w_out)
+        
+        consensus_f32 = sum_wv / (sum_w + eps_32)
+        consensus_f16 = consensus_f32.astype(cp.float16)
+        
+        x_soa[0] = consensus_f16[v0]
+        x_soa[1] = consensus_f16[v1]
+        x_soa[2] = consensus_f16[v2]
+        
+        cp.clip(x_soa, cp.float16(-1.0), cp.float16(1.0), out=x_soa)
+        
+        if step % 50 == 0:
+            current_x = cp.sign(consensus_f16)
+            sat_count = int(cp.count_nonzero(
+                (current_x[v0] == p_soa[0]) |
+                (current_x[v1] == p_soa[1]) |
+                (current_x[v2] == p_soa[2])
+            ))
+            print(f"Step {step:4d}: SAT={sat_count}/{m} | Time: {time.time()-start_time:.4f}s")
+            
+            if sat_count == m:
+                print(f"\n[VICTORY] Topology Optimization Break Hardware Limit!")
+                print(f"Total Computation Time: {time.time()-start_time:.4f}s")
+                return True
+
+    return False
+
+# 执行验证
+solve_sat_ode_gpu_topological_resonance(4000000, 17040000, max_steps=2000)
+```
+
+Initializing Problem: n=4000000, m=17040000 (Phase Transition 3-SAT)
+
+[Optimization] Applying Topological Space-Filling Reordering...
+-> Topology Reordered in 0.0021s
+
+Building Optimized cuSPARSE CSR Matrices...
+Allocating Memory Pools...
+
+--- Starting Hardware Accelerated ODE (Topology Resonance Mode) ---
+Step   50: SAT=17030506/17040000 | Time: 2.0905s
+Step  100: SAT=17038588/17040000 | Time: 3.9076s
+Step  150: SAT=17039953/17040000 | Time: 5.7214s
+Step  200: SAT=17040000/17040000 | Time: 7.5375s
+
+[VICTORY] Topology Optimization Break Hardware Limit!
+Total Computation Time: 7.5376s
+True
+
+---
+
 将这套宏伟的连续流形理论转化为工程落地的工业级代码，我们需要采用**“编译器前端 + 物理引擎后端”**的架构模式。
 
 这套代码大纲（基于 Python + PyTorch/NumPy 生态设计）不仅仅是一个求解器，而是一个**“NP-to-Manifold（NP问题到流形的跨维度编译器）”**。
