@@ -13503,6 +13503,319 @@ $$\bar{x}_i \text{ 漂移} \xrightarrow{\text{产生共识力 } G_{jk}} s_{jk} \
 
 ---
 
+为了更清晰地展示系统动力学的数学本质，我们引入**统一势能函数**（Unified Potential Function），将局部梯度力与全局共识指引力均统一表示为该势能函数的**偏导数（Partial Derivatives）**。
+
+定义系统的总势能函数为：
+$$\mathcal{H}(\mathbf{u}, \mathbf{v}, \mathbf{w}) = V_{\text{local}}(\mathbf{u}, \mathbf{v}, \mathbf{w}) + \gamma V_{\text{consensus}}(\mathbf{u}, \mathbf{v}, \mathbf{w})$$
+
+其中：
+*   **局部冲突势能**：$V_{\text{local}} = V_1(\mathbf{u}) + V_2(\mathbf{v}) + V_3(\mathbf{w})$
+*   **全局共识势能**：$V_{\text{consensus}} = \frac{1}{2} \sum_{s \in \{u, v, w\}} \sum_{k=1}^3 (s_k - \sigma_{s,k} \bar{x}_{\pi(s,k)})^2$
+    （这里 $\sigma_{s,k} \in \{1, -1\}$ 为文字的符号，$\bar{x}_{\pi(s,k)}$ 为对应的变量全局均值，在偏微分计算中，将全局均值 $\bar{x}$ 视为当前的系统状态参数）。
+
+系统的演化方程由各状态分量的负偏导数（梯度下降）决定，并引入边界投影算子 $\Pi$：
+$$\dot{s}_k = \Pi_{[-1, 1]} \left( s_k, -\frac{\partial \mathcal{H}}{\partial s_k} \right) = \Pi_{[-1, 1]} \left( s_k, -\frac{\partial V_{\text{local}}}{\partial s_k} - \gamma \frac{\partial V_{\text{consensus}}}{\partial s_k} \right)$$
+
+其中边界投影算子定义为：
+$$\Pi_{[-1,1]}(y, f) = \begin{cases} 0 & \text{若 } y = 1 \text{ 且 } f > 0 \\ 0 & \text{若 } y = -1 \text{ 且 } f < 0 \\ f & \text{其他情况} \end{cases}$$
+
+---
+
+## 1. 局部冲突势能的偏导数解析表达式
+
+对 9 维空间中的每一个变量，其局部冲突势能的偏导数计算如下：
+
+### 1.1 子句 $C_1$ 空间 $\mathbf{u}$ 的偏导数：
+$$\frac{\partial V_{\text{local}}}{\partial u_1} = \frac{\partial V_1}{\partial u_1} = -\frac{1}{8}(1-u_2)(1-u_3)$$
+$$\frac{\partial V_{\text{local}}}{\partial u_2} = \frac{\partial V_1}{\partial u_2} = -\frac{1}{8}(1-u_1)(1-u_3)$$
+$$\frac{\partial V_{\text{local}}}{\partial u_3} = \frac{\partial V_1}{\partial u_3} = -\frac{1}{8}(1-u_1)(1-u_2)$$
+
+### 1.2 子句 $C_2$ 空间 $\mathbf{v}$ 的偏导数：
+$$\frac{\partial V_{\text{local}}}{\partial v_1} = \frac{\partial V_2}{\partial v_1} = -\frac{1}{8}(1-v_2)(1-v_3)$$
+$$\frac{\partial V_{\text{local}}}{\partial v_2} = \frac{\partial V_2}{\partial v_2} = -\frac{1}{8}(1-v_1)(1-v_3)$$
+$$\frac{\partial V_{\text{local}}}{\partial v_3} = \frac{\partial V_2}{\partial v_3} = -\frac{1}{8}(1-v_1)(1-v_2)$$
+
+### 1.3 子句 $C_3$ 空间 $\mathbf{w}$ 的偏导数：
+$$\frac{\partial V_{\text{local}}}{\partial w_1} = \frac{\partial V_3}{\partial w_1} = -\frac{1}{8}(1-w_2)(1-w_3)$$
+$$\frac{\partial V_{\text{local}}}{\partial w_2} = \frac{\partial V_3}{\partial w_2} = -\frac{1}{8}(1-w_1)(1-w_3)$$
+$$\frac{\partial V_{\text{local}}}{\partial w_3} = \frac{\partial V_3}{\partial w_3} = -\frac{1}{8}(1-w_1)(1-w_2)$$
+
+---
+
+## 2. 初始状态（$t=0$）的偏微分计算与一步迭代
+
+### 2.1 初始物理状态
+初始逻辑赋值为 $x_1 = -1, x_2 = -1, x_3 = 1$。
+对齐到 9 维空间：
+*   $\mathbf{u}(0) = (-1, -1, -1)^T$
+*   $\mathbf{v}(0) = (1, -1, 1)^T$
+*   $\mathbf{w}(0) = (1, -1, -1)^T$
+
+### 2.2 计算 $t=0$ 时的局部势能偏导数数值
+将初始值代入上述偏导数公式：
+
+*   **对于 $\mathbf{u}$**：
+    $$\frac{\partial V_{\text{local}}}{\partial u_1}\Big|_{t=0} = -\frac{1}{8}(1 - (-1))(1 - (-1)) = -0.5$$
+    $$\frac{\partial V_{\text{local}}}{\partial u_2}\Big|_{t=0} = -\frac{1}{8}(1 - (-1))(1 - (-1)) = -0.5$$
+    $$\frac{\partial V_{\text{local}}}{\partial u_3}\Big|_{t=0} = -\frac{1}{8}(1 - (-1))(1 - (-1)) = -0.5$$
+    即：$-\nabla_{\mathbf{u}} V_{\text{local}}(0) = (0.5, 0.5, 0.5)^T$。
+
+*   **对于 $\mathbf{v}$**：
+    由于 $v_1(0) = 1, v_3(0) = 1$，代入偏导数公式中含有因子 $(1-v_1)$ 或 $(1-v_3)$，因此：
+    $$\frac{\partial V_{\text{local}}}{\partial v_1}\Big|_{t=0} = -\frac{1}{8}(1 - (-1))(1 - 1) = 0$$
+    $$\frac{\partial V_{\text{local}}}{\partial v_2}\Big|_{t=0} = -\frac{1}{8}(1 - 1)(1 - 1) = 0$$
+    $$\frac{\partial V_{\text{local}}}{\partial v_3}\Big|_{t=0} = -\frac{1}{8}(1 - 1)(1 - (-1)) = 0$$
+    即：$-\nabla_{\mathbf{v}} V_{\text{local}}(0) = (0, 0, 0)^T$。
+
+*   **对于 $\mathbf{w}$**：
+    由于 $w_1(0) = 1, w_2(0) = -1, w_3(0) = -1$：
+    $$\frac{\partial V_{\text{local}}}{\partial w_1}\Big|_{t=0} = -\frac{1}{8}(1 - (-1))(1 - (-1)) = -0.5$$
+    $$\frac{\partial V_{\text{local}}}{\partial w_2}\Big|_{t=0} = -\frac{1}{8}(1 - 1)(1 - (-1)) = 0$$
+    $$\frac{\partial V_{\text{local}}}{\partial w_3}\Big|_{t=0} = -\frac{1}{8}(1 - 1)(1 - (-1)) = 0$$
+    即：$-\nabla_{\mathbf{w}} V_{\text{local}}(0) = (0.5, 0, 0)^T$。
+
+### 2.3 计算 $t=0$ 时的全局共识势能偏导数
+此时系统处于完美共识流形上，计算全局均值：
+$$\bar{x}_1(0) = -1, \quad \bar{x}_2(0) = -1, \quad \bar{x}_3(0) = 1$$
+
+对任意变量 $s_k$，其对应的共识项为 $V_{c, s_k} = \frac{1}{2}(s_k - \sigma_{s,k} \bar{x}_{\pi(s,k)})^2$。其偏导数为：
+$$\frac{\partial V_{\text{consensus}}}{\partial s_k} = s_k - \sigma_{s,k} \bar{x}_{\pi(s,k)}$$
+
+代入初始值，例如对于 $u_1$（对应 $x_1$，即 $\sigma_{u,1}=1$）：
+$$\frac{\partial V_{\text{consensus}}}{\partial u_1}\Big|_{t=0} = u_1(0) - \bar{x}_1(0) = -1 - (-1) = 0$$
+同理可得，在 $t=0$ 时，所有 9 维状态上的全局共识势能偏导数均为 0：
+$$\nabla_{\mathbf{u}, \mathbf{v}, \mathbf{w}} V_{\text{consensus}}(0) = \mathbf{0}$$
+
+### 2.4 一步离散迭代（步长 $\delta t = 0.2$）
+由于共识力偏导数为 0，此时更新仅取决于局部冲突势能的负偏导数：
+
+*   **更新 $\mathbf{u}$**：
+    $$\mathbf{u}^* = \mathbf{u}(0) - \delta t \nabla_{\mathbf{u}} V_{\text{local}}(0) = \begin{pmatrix} -1 \\ -1 \\ -1 \end{pmatrix} + 0.2 \begin{pmatrix} 0.5 \\ 0.5 \\ 0.5 \end{pmatrix} = \begin{pmatrix} -0.9 \\ -0.9 \\ -0.9 \end{pmatrix}$$
+*   **更新 $\mathbf{v}$**：
+    $$\mathbf{v}^* = \mathbf{v}(0) - \delta t \nabla_{\mathbf{v}} V_{\text{local}}(0) = \begin{pmatrix} 1 \\ -1 \\ 1 \end{pmatrix} + 0.2 \begin{pmatrix} 0 \\ 0 \\ 0 \end{pmatrix} = \begin{pmatrix} 1 \\ -1 \\ 1 \end{pmatrix}$$
+*   **更新 $\mathbf{w}$**：
+    $$w_1^* = w_1(0) - \delta t \frac{\partial V_{\text{local}}}{\partial w_1} = 1 + 0.2 \times 0.5 = 1.1$$
+    经边界投影算子截断：$\Pi_{[-1, 1]}(1.1) = 1.0$。其余分量无偏导数驱动，故：
+    $$\mathbf{w}^* = \begin{pmatrix} 1.0 \\ -1 \\ -1 \end{pmatrix}$$
+
+---
+
+## 3. 共识势能偏导数的激活（$t_1 = 0.2$）
+
+在第一步迭代后，由于局部冲突驱使系统偏离原有的共识状态，共识势能的偏导数开始显式发挥作用。
+
+### 3.1 重新计算当前的全局共识均值
+根据更新后的状态计算当前的变量均值：
+$$\bar{x}_1(t_1) = \frac{u_1^* - v_1^* + w_3^*}{3} = \frac{-0.9 - 1.0 - 1.0}{3} \approx -0.967$$
+$$\bar{x}_2(t_1) = \frac{u_2^* + v_2^* - w_1^*}{3} = \frac{-0.9 - 1.0 - 1.0}{3} \approx -0.967$$
+$$\bar{x}_3(t_1) = \frac{-u_3^* + v_3^* - w_2^*}{3} = \frac{0.9 + 1.0 + 1.0}{3} \approx 0.967$$
+
+### 3.2 计算被卡在边界上的变量 $v_1$ 的共识势能偏导数
+此时 $v_1^* = 1.0$。$v_1$ 对应逻辑变量 $\neg x_1$，故其共识靶向值为 $-\bar{x}_1(t_1) = 0.967$。
+计算其关于共识势能的偏导数：
+$$\frac{\partial V_{\text{consensus}}}{\partial v_1}\Big|_{t_1} = v_1^* - (-\bar{x}_1(t_1)) = 1.0 - 0.967 = 0.033$$
+
+对应的负偏导数（共识驱动力）为：
+$$G_{v1}(t_1) = -\gamma \frac{\partial V_{\text{consensus}}}{\partial v_1}\Big|_{t_1} = -0.5 \times 0.033 = -0.0165$$
+
+*   **物理效应（解锁）**：此时该负偏导数小于 0，其产生的合力指向区间内部。尽管局部势能偏导数 $\frac{\partial V_{\text{local}}}{\partial v_1} = 0$，但共识势能偏导数带来的拉力成功将 $v_1$ 拉离边界值 $1.0$，使子句 $C_2$ 的通道被重新激活。
+
+---
+
+## 4. 全局解处的偏微分绝对稳定性验证
+
+当系统收敛至全局解时：
+$$\mathbf{x}^* = (1, 1, -1)^T$$
+对应的 9 维空间状态为：
+$$\mathbf{u}^* = (1, 1, 1)^T, \quad \mathbf{v}^* = (-1, 1, -1)^T, \quad \mathbf{w}^* = (-1, 1, 1)^T$$
+
+此时对应的全局均值为 $\bar{x}_1 = 1, \bar{x}_2 = 1, \bar{x}_3 = -1$。
+
+### 4.1 验证共识势能的偏导数
+将状态与对应的全局均值代入共识偏导数公式：
+*   $\frac{\partial V_{\text{consensus}}}{\partial u_1} = u_1^* - \bar{x}_1 = 1 - 1 = 0$
+*   $\frac{\partial V_{\text{consensus}}}{\partial v_1} = v_1^* - (-\bar{x}_1) = -1 - (-1) = 0$
+*   $\frac{\partial V_{\text{consensus}}}{\partial w_1} = w_1^* - (-\bar{x}_2) = -1 - (-1) = 0$
+以此类推，容易验证所有 9 个状态变量的共识势能偏导数全部归零：
+$$\nabla_{\mathbf{u}, \mathbf{v}, \mathbf{w}} V_{\text{consensus}} = \mathbf{0}$$
+
+### 4.2 验证局部冲突势能的偏导数与边界截断
+由于系统达到完全满足状态，各个子句的局部势能处于零点。代入其偏导数公式：
+
+*   **对于 $\mathbf{u}^* = (1, 1, 1)^T$**：
+    $$\frac{\partial V_{\text{local}}}{\partial u_1}\Big|_{\mathbf{u}^*} = -\frac{1}{8}(1-1)(1-1) = 0$$
+    同理，$\mathbf{u}$ 的所有偏导数均为 0。
+
+*   **对于 $\mathbf{w}^* = (-1, 1, 1)^T$**：
+    由于 $w_3^* = 1$，则含有 $(1-w_3)$ 因子的偏导数 $\frac{\partial V_3}{\partial w_1}$ 和 $\frac{\partial V_3}{\partial w_2}$ 均为 0。而对于 $\frac{\partial V_3}{\partial w_3}$：
+    $$\frac{\partial V_3}{\partial w_3}\Big|_{\mathbf{w}^*} = -\frac{1}{8}(1 - (-1))(1-1) = 0$$
+    故 $\mathbf{w}$ 的所有偏导数均为 0。
+
+*   **对于 $\mathbf{v}^* = (-1, 1, -1)^T$**：
+    含有 $(1-v_2)$ 因子（因为 $v_2^* = 1$）的偏导数 $\frac{\partial V_2}{\partial v_1}$ 和 $\frac{\partial V_2}{\partial v_3}$ 均为 0。
+    但对于 $\frac{\partial V_2}{\partial v_2}$ 这一分量：
+    $$\frac{\partial V_{\text{local}}}{\partial v_2}\Big|_{\mathbf{v}^*} = -\frac{1}{8}(1 - (-1))(1 - (-1)) = -0.5$$
+    该项对应的局部负偏导数为 $-\frac{\partial V_{\text{local}}}{\partial v_2} = 0.5$。
+    然而，由于此时 $v_2^* = 1$ 已处于上边界，将其代入动力学方程并应用投影算子：
+    $$\dot{v}_2 = \Pi_{[-1, 1]}(1, 0.5) = 0$$
+    因此该正向驱动力被边界完全抵消。
+
+### 结论
+在全局解状态下，系统的总势能函数偏导数 $\nabla \mathcal{H}$ 在区间内部的分量全部为 0，而唯一不为 0 的偏导数分量在边界处被投影算子阻断。系统在该动力学下达到绝对平衡。
+
+---
+
+在动力学系统（特别是受约束的系统）中，将多维状态空间的偏微分与共识流形上的全微分通过**多元函数链式法则（Chain Rule for Partial Derivatives）**进行关联，能更清晰地揭示系统演化的几何本质。
+
+## 5. 极简局部冲突模型重算
+
+### 5.1 6维空间势能与偏导数定义
+
+定义 6 维状态空间 $\mathbf{X} = (u_1, u_2, u_3, v_1, v_2, v_3)^T \in [-1, 1]^6$。
+其中子句冲突势能分别定义为：
+$$V_1(\mathbf{u}) = \frac{1}{8}(1-u_1)(1-u_2)(1-u_3)$$
+$$V_2(\mathbf{v}) = \frac{1}{8}(1-v_1)(1-v_2)(1-v_3)$$
+
+总势能函数为 $V(\mathbf{X}) = V_1(\mathbf{u}) + V_2(\mathbf{v})$。其在 6 维空间中的偏导数（负局部驱动力）为：
+$$\frac{\partial V}{\partial u_k} = \frac{\partial V_1}{\partial u_k} = -\frac{1}{8} \prod_{j \neq k} (1-u_j), \quad (k=1,2,3)$$
+$$\frac{\partial V}{\partial v_k} = \frac{\partial V_2}{\partial v_k} = -\frac{1}{8} \prod_{j \neq k} (1-v_j), \quad (k=1,2,3)$$
+
+---
+
+### 5.2 共识流形下的动力学投影
+
+共识流形 $\mathcal{M}$ 由约束方程决定，该流形由一维参数 $x_1 \in [-1, 1]$ 参数化：
+$$\mathbf{X}(x_1) = \begin{pmatrix} \mathbf{u}(x_1) \\ \mathbf{v}(x_1) \end{pmatrix} \implies \begin{cases} u_k(x_1) = x_1 \\ v_k(x_1) = -x_1 \end{cases} \quad (k=1,2,3)$$
+
+在共识约束下，每个位置对参数 $x_1$ 的偏导数为：
+$$\frac{\partial u_k}{\partial x_1} = 1, \quad \frac{\partial v_k}{\partial x_1} = -1$$
+
+根据多元复合函数的链式法则，约束在流形上的总哈密顿量 $\mathcal{H}(x_1) = V(\mathbf{X}(x_1))$ 对 $x_1$ 的导数可由 6 维空间的偏导数线性组合得到：
+$$\frac{d\mathcal{H}}{dx_1} = \sum_{k=1}^3 \left( \frac{\partial V}{\partial u_k} \frac{\partial u_k}{\partial x_1} + \frac{\partial V}{\partial v_k} \frac{\partial v_k}{\partial x_1} \right)$$
+
+将共识流形上的状态值代入偏导数：
+$$\frac{\partial V}{\partial u_k}\Big|_{\mathcal{M}} = -\frac{1}{8}(1-x_1)^2$$
+$$\frac{\partial V}{\partial v_k}\Big|_{\mathcal{M}} = -\frac{1}{8}(1+x_1)^2$$
+
+代入链式法则展开式中：
+$$\frac{d\mathcal{H}}{dx_1} = \sum_{k=1}^3 \left[ -\frac{1}{8}(1-x_1)^2 \cdot (1) + \left( -\frac{1}{8}(1+x_1)^2 \right) \cdot (-1) \right]$$
+$$\frac{d\mathcal{H}}{dx_1} = 3 \cdot \left[ -\frac{1}{8}(1-2x_1+x_1^2) + \frac{1}{8}(1+2x_1+x_1^2) \right] = 3 \cdot \left( \frac{4x_1}{8} \right) = \frac{3}{2}x_1$$
+
+由此确定系统沿着该一维通道演化的运动方程为：
+$$\frac{d x_1}{dt} = -\frac{d\mathcal{H}}{dx_1} = -\frac{3}{2}x_1$$
+
+解得：
+$$x_1(t) = x_1(0) e^{-1.5 t}$$
+
+系统轨迹收敛至平衡点 $x_1^* = 0$。
+
+---
+
+### 5.3 残留势能提取与冲突核心判定
+
+在平衡态 $x_1^* = 0$（即 $\mathbf{u}^* = (0,0,0)^T, \mathbf{v}^* = (0,0,0)^T$）处，计算各子句的最小势能：
+$$V_{1, \min} = V_1(\mathbf{u}^*) = \frac{1}{8}(1-0)^3 = \frac{1}{8} > 0$$
+$$V_{2, \min} = V_2(\mathbf{v}^*) = \frac{1}{8}(1+0)^3 = \frac{1}{8} > 0$$
+
+平衡态总残留势能为 $\mathcal{H}_{\min} = \frac{1}{4}$。由于两个子句在系统达到动力学平衡后，其势能均无法归零，因此，整个子句集合自动被判定为不满足核心：
+$$\mathcal{C}_{core} = \{C_1, C_2\}$$
+
+---
+
+## 6. 长程不满足问题（全局死锁环）重算
+
+### 6.1 15维空间势能与共识流形偏导数
+
+整个系统包含 15 维文字坐标 $\mathbf{S} = (\mathbf{s}^{(1)}, \mathbf{s}^{(2)}, \mathbf{s}^{(3)}, \mathbf{s}^{(4)}, \mathbf{s}^{(5)}) \in [-1, 1]^{15}$。
+通过共识映射，系统被约束在 3 维共识流形 $\mathbf{x} = (x_1, x_2, x_3)^T \in [-1, 1]^3$ 上。
+
+这 5 个子句在 3 维流形上的势能表达式为：
+$$V_1(\mathbf{x}) = \frac{1}{8}(1-x_1)(1+x_2)^2, \quad V_2(\mathbf{x}) = \frac{1}{8}(1-x_2)(1+x_3)^2, \quad V_3(\mathbf{x}) = \frac{1}{8}(1-x_3)(1+x_1)^2$$
+$$V_4(\mathbf{x}) = \frac{1}{8}(1+x_1)(1+x_2)(1+x_3), \quad V_5(\mathbf{x}) = \frac{1}{8}(1-x_1)(1-x_2)(1-x_3)$$
+
+总共识势能为 $\mathcal{H}(\mathbf{x}) = \sum_{j=1}^5 V_j(\mathbf{x})$。
+
+---
+
+### 6.2 偏微分计算与旋转对称性
+
+我们计算总势能 $\mathcal{H}(\mathbf{x})$ 对各个变量的偏导数。以 $x_1$ 为例，计算偏导数 $\frac{\partial \mathcal{H}}{\partial x_1}$：
+$$\frac{\partial \mathcal{H}}{\partial x_1} = \frac{\partial V_1}{\partial x_1} + \frac{\partial V_2}{\partial x_1} + \frac{\partial V_3}{\partial x_1} + \frac{\partial V_4}{\partial x_1} + \frac{\partial V_5}{\partial x_1}$$
+
+各项偏微分的具体计算如下：
+*   $\frac{\partial V_1}{\partial x_1} = -\frac{1}{8}(1+x_2)^2$
+*   $\frac{\partial V_2}{\partial x_1} = 0$
+*   $\frac{\partial V_3}{\partial x_1} = \frac{1}{4}(1-x_3)(1+x_1)$
+*   $\frac{\partial V_4}{\partial x_1} = \frac{1}{8}(1+x_2)(1+x_3)$
+*   $\frac{\partial V_5}{\partial x_1} = -\frac{1}{8}(1-x_2)(1-x_3)$
+
+将这些偏导数项相加，得到 $x_1$ 方向上的完整受力场：
+$$\frac{\partial \mathcal{H}}{\partial x_1} = -\frac{1}{8}(1+x_2)^2 + \frac{1}{4}(1-x_3)(1+x_1) + \frac{1}{8}(1+x_2)(1+x_3) - \frac{1}{8}(1-x_2)(1-x_3)$$
+
+利用系统的循环置换对称性，同理可得 $\frac{\partial \mathcal{H}}{\partial x_2}$ 与 $\frac{\partial \mathcal{H}}{\partial x_3}$ 的偏微分表达式：
+$$\frac{\partial \mathcal{H}}{\partial x_2} = -\frac{1}{8}(1+x_3)^2 + \frac{1}{4}(1-x_1)(1+x_2) + \frac{1}{8}(1+x_3)(1+x_1) - \frac{1}{8}(1-x_3)(1-x_1)$$
+$$\frac{\partial \mathcal{H}}{\partial x_3} = -\frac{1}{8}(1+x_1)^2 + \frac{1}{4}(1-x_2)(1+x_3) + \frac{1}{8}(1+x_1)(1+x_2) - \frac{1}{8}(1-x_1)(1-x_2)$$
+
+---
+
+### 6.3 对角对称线上的偏微分简化与极值点求解
+
+由于系统的对称结构，吸引子中心位于对角线 $x_1 = x_2 = x_3 = y$ 上。我们将对角约束代入偏微分方程中：
+$$\frac{\partial \mathcal{H}}{\partial x_1}\Big|_{x_i=y} = -\frac{1}{8}(1+y)^2 + \frac{2}{8}(1-y)(1+y) + \frac{1}{8}(1+y)^2 - \frac{1}{8}(1-y)^2$$
+
+观察发现，第一项与第三项相互抵消：
+$$\frac{\partial \mathcal{H}}{\partial x_1}\Big|_{x_i=y} = \frac{2}{8}(1-y^2) - \frac{1}{8}(1-2y+y^2) = \frac{-3y^2 + 2y + 1}{8}$$
+
+同理，其余偏导数在对角线上也具有相同的值：
+$$\frac{\partial \mathcal{H}}{\partial x_2}\Big|_{x_i=y} = \frac{\partial \mathcal{H}}{\partial x_3}\Big|_{x_i=y} = \frac{-3y^2 + 2y + 1}{8}$$
+
+根据多元函数临界点条件，令所有偏导数等于 0：
+$$-3y^2 + 2y + 1 = 0 \implies (3y+1)(1-y) = 0$$
+
+解得两个物理临界点：
+1.  $y_1^* = 1$
+2.  $y_2^* = -1/3$
+
+---
+
+### 6.4 偏微分的二阶稳定性分析
+
+为了判断临界点的稳定性，我们需要在对角线方向上对一阶偏导数再次求导。定义沿对角线的方向导数为 $D_{\mathbf{v}} \mathcal{H}$（其中方向向量为 $\mathbf{v} = \frac{1}{\sqrt{3}}(1, 1, 1)^T$）。
+沿对角线的一阶偏导数变化率为：
+$$\frac{d}{dy}\left( \frac{\partial \mathcal{H}}{\partial x_1}\Big|_{x_i=y} \right) = \frac{d}{dy}\left( \frac{-3y^2 + 2y + 1}{8} \right) = \frac{-6y + 2}{8} = \frac{-3y + 1}{4}$$
+
+*   **对于 $y_1^* = 1$**：
+    $$\frac{d}{dy}\left( \frac{\partial \mathcal{H}}{\partial x_1} \right)\Big|_{y=1} = -\frac{2}{4} = -0.5 < 0$$
+    斜率为负，说明在此点若 $y$ 增加，则受力 $\left(-\frac{\partial \mathcal{H}}{\partial x_1}\right)$ 变为正，推动系统进一步偏离，因此为**不稳定平衡点（极大值点）**。
+
+*   **对于 $y_2^* = -1/3$**：
+    $$\frac{d}{dy}\left( \frac{\partial \mathcal{H}}{\partial x_1} \right)\Big|_{y=-1/3} = \frac{-3(-1/3) + 1}{4} = \frac{2}{4} = 0.5 > 0$$
+    斜率为正，说明在此点若产生扰动，受力方向与扰动方向相反，系统具有自恢复性，因此为**稳定平衡点（极小值点）**。
+
+因此，系统最终会稳定地收敛至该局部吸引子：
+$$x_1^* = x_2^* = x_3^* = -\frac{1}{3}$$
+
+---
+
+### 6.5 势能绝对不归零验证与拓扑核心定位
+
+将稳态解 $y^* = -1/3$ 代入 5 个子句的势能中，精确计算其势能最小值：
+
+1.  **子句 $C_1, C_2, C_3$（环形不等式链）**：
+    $$V_{1, \min} = V_{2, \min} = V_{3, \min} = \frac{1}{8}\left(1 - \left(-\frac{1}{3}\right)\right)\left(1 + \left(-\frac{1}{3}\right)\right)^2 = \frac{1}{8}\left(\frac{4}{3}\right)\left(\frac{2}{3}\right)^2 = \frac{2}{27} \approx 0.0741 > 0$$
+2.  **子句 $C_4$（排除全真）**：
+    $$V_{4, \min} = \frac{1}{8}\left(1 + \left(-\frac{1}{3}\right)\right)^3 = \frac{1}{8}\left(\frac{2}{3}\right)^3 = \frac{1}{27} \approx 0.0370 > 0$$
+3.  **子句 $C_5$（排除全假）**：
+    $$V_{5, \min} = \frac{1}{8}\left(1 - \left(-\frac{1}{3}\right)\right)^3 = \frac{1}{8}\left(\frac{4}{3}\right)^3 = \frac{8}{27} \approx 0.2963 > 0$$
+
+平衡态的总理论残留势能为：
+$$\mathcal{H}_{\min} = 3 \times \frac{2}{27} + \frac{1}{27} + \frac{8}{27} = \frac{15}{27} = \frac{5}{9} \approx 0.5556 > 0$$
+
+每个子句的势能最小值均严格大于零（且在此稳态下 $\langle V_j \rangle_T > 0$），满足定理 6.2 判据，从而确定了该死锁模型对应的最小不满足核心（MUC）：
+$$\mathcal{C}_{core} = \{C_1, C_2, C_3, C_4, C_5\}$$
+
+---
+
 ### 1.1 命题逻辑的语法形式化 (Syntax)
 
 设 $\mathcal{X} = \{x_1, x_2, \dots, x_n\}$ 为命题变量的有限集合。
@@ -24938,678 +25251,6 @@ Tseitin无解       | 2 | 96     | 385    | UNSAT (地图自动判定)       | 0
 相变UNSAT         | 2 | 96     | 528    | UNSAT (地图自动判定)       | 0.16s
 └─ 结果有效: ✅ | UNSAT (地图自动判定)
 
----
-
-```python
-import numpy as np
-import time
-import random
-from collections import deque
-from itertools import product, combinations
-
-# ============================================================
-# 1. 核心数学工具与硬核矛盾生成器
-# ============================================================
-class AuxCounter:
-    def __init__(self, base): self.val = base
-    def next(self):
-        v = self.val
-        self.val += 1
-        return v
-
-def unit_to_3cnf(v1, p1, aux):
-    y1, y2 = aux.next(), aux.next()
-    cls = []
-    for b1, b2 in product([0.0, 1.0], repeat=2):
-        cls.append(([v1, y1, y2], [p1, b1, b2]))
-    return cls
-
-def two_lit_to_3cnf(v1, p1, v2, p2, aux):
-    y = aux.next()
-    return [([v1, v2, y], [p1, p2, 0.0]), ([v1, v2, y], [p1, p2, 1.0])]
-
-# [问题1] 随机相变点 3-SAT: 处于 Alpha=4.26 的混沌边缘，最难找到 SAT 解
-def gen_phase_transition_sat(n):
-    m = int(n * 4.26)
-    clauses = []
-    for _ in range(m):
-        vs = random.sample(range(n), 3)
-        ps = [float(random.randint(0, 1)) for _ in range(3)]
-        clauses.append((vs, ps))
-    return n, m, clauses, "SAT"
-
-# [问题2] 鸽巢原理 (PHP): 经典组合爆炸问题，Resolution 证明需指数级步数
-def gen_php(n_holes):
-    n_pigeons = n_holes + 1
-    n_vars = n_pigeons * n_holes
-    aux = AuxCounter(n_vars)
-    clauses = []
-    p = lambda i, j: i * n_holes + j
-    for i in range(n_pigeons):
-        lits = [(p(i, j), 0.0) for j in range(n_holes)]
-        while len(lits) > 3:
-            v1, p1 = lits.pop(0); v2, p2 = lits.pop(0); y = aux.next()
-            clauses.append(([v1, v2, y], [p1, p2, 0.0])); lits.insert(0, (y, 1.0))
-        if len(lits) == 3: clauses.append(([l[0] for l in lits], [l[1] for l in lits]))
-        elif len(lits) == 2: clauses.extend(two_lit_to_3cnf(lits[0][0], lits[0][1], lits[1][0], lits[1][1], aux))
-    for j in range(n_holes):
-        for i1, i2 in combinations(range(n_pigeons), 2):
-            clauses.extend(two_lit_to_3cnf(p(i1, j), 1.0, p(i2, j), 1.0, aux))
-    return aux.val, len(clauses), clauses, "UNSAT"
-
-# [问题3] Tseitin 矛盾: 在图结构上构造的奇偶校验冲突，测试拓扑鲁棒性
-def gen_tseitin(n_nodes):
-    n = n_nodes if n_nodes % 2 == 0 else n_nodes + 1
-    edges = []
-    for i in range(n): edges.append((i, (i+1)%n)); edges.append((i, (i+n//2)%n))
-    edges = list(set(tuple(sorted(e)) for e in edges))
-    m_vars = len(edges); edge_to_var = {e: i for i, e in enumerate(edges)}
-    adj = [[] for _ in range(n)]
-    for i, (u, v) in enumerate(edges): adj[u].append(i); adj[v].append(i)
-    aux = AuxCounter(m_vars); clauses = []
-    for i in range(n):
-        target = 1 if i == 0 else 0
-        v_edges = adj[i]; k = len(v_edges)
-        for bits in product([0, 1], repeat=k):
-            if sum(bits) % 2 != target:
-                lits = [(v_edges[j], float(bits[j])) for j in range(k)]
-                while len(lits) > 3:
-                    v1, p1 = lits.pop(0); v2, p2 = lits.pop(0); y = aux.next()
-                    clauses.append(([v1, v2, y], [p1, p2, 0.0])); lits.insert(0, (y, 1.0))
-                if len(lits) == 3: clauses.append(([l[0] for l in lits], [l[1] for l in lits]))
-                elif len(lits) == 2: clauses.extend(two_lit_to_3cnf(lits[0][0], lits[0][1], lits[1][0], lits[1][1], aux))
-                elif len(lits) == 1: clauses.extend(unit_to_3cnf(lits[0][0], lits[0][1], aux))
-    return aux.val, len(clauses), clauses, "UNSAT"
-
-# [问题4] 最小不可满足子集 (MUF): 极高密度的约束冲突
-def gen_muf(n):
-    n_limit = max(3, n)
-    aux = AuxCounter(n_limit)
-    clauses = []
-    for bits in product([0.0, 1.0], repeat=n_limit):
-        lits = list(enumerate(bits))
-        while len(lits) > 3:
-            v1, p1 = lits.pop(0); v2, p2 = lits.pop(0); y = aux.next()
-            clauses.append(([v1, v2, y], [p1, p2, 0.0])); lits.insert(0, (y, 1.0))
-        if len(lits) == 3: clauses.append(([l[0] for l in lits], [l[1] for l in lits]))
-        elif len(lits) == 2: clauses.extend(two_lit_to_3cnf(lits[0][0], lits[0][1], lits[1][0], lits[1][1], aux))
-    return aux.val, len(clauses), clauses, "UNSAT"
-
-# [问题5] 超相变随机 UNSAT: Alpha=5.0 远超相变点，测试算法对极难无解实例的提取能力
-def gen_hard_unsat(n):
-    m = int(n * 5.0)
-    clauses = []
-    for _ in range(m):
-        vs = random.sample(range(n), 3)
-        ps = [float(random.randint(0, 1)) for _ in range(3)]
-        clauses.append((vs, ps))
-    return n, m, clauses, "UNSAT"
-
-# ============================================================
-# 2. N-FWTE 5.9 终极黄金引擎 (物理同构张量优化)
-# ============================================================
-class NFWTESolver:
-    def __init__(self, n_vars, n_clauses, clauses, w_size=64):
-        self.nv, self.mc, self.clauses = n_vars, n_clauses, clauses
-        self.w_size = w_size
-        self.max_steps = 100 * n_vars
-        self.cv = np.array([c[0] for c in clauses], dtype=np.int32)
-        self.cd = np.array([c[1] for c in clauses], dtype=np.float32)
-        self.cs = np.where(self.cd == 0, 1.0, -1.0).astype(np.float32)
-        self.PHI = 0.6180339887498949
-        seq = (np.arange(1, w_size * n_vars + 1) * self.PHI) % 1.0
-        self.z = (seq * 1.8 - 0.9).reshape(w_size, n_vars)
-        self.v = np.zeros_like(self.z)
-        self.history = deque(maxlen=40)
-        self.kick_count = 0        
-        self.max_kicks = 4
-
-    def solve(self):
-        start_t = time.time()
-        for step in range(1, self.max_steps + 1):
-            # 拓扑势能计算
-            terms = 0.5 * (1.0 - self.cs[None, :, :] * self.z[:, self.cv])
-            v_j = np.prod(terms, axis=2)
-            energies = np.sum(v_j, axis=1)
-            min_e = np.min(energies)
-            self.history.append(min_e)
-
-            # SAT 判定
-            if min_e < 0.3:
-                best_idx = np.argmin(energies)
-                sols = (self.z[best_idx] > 0).astype(float)
-                if np.all(np.any(sols[self.cv] != self.cd, axis=1)):
-                    return "SAT (基态坍缩)", step, time.time()-start_t, None
-
-            # 梯度演化
-            weights = np.exp(v_j * 4.0) 
-            weights /= (np.mean(weights, axis=1, keepdims=True) + 1e-9)
-            g0 = (-0.5 * self.cs[None, :, 0]) * terms[:, :, 1] * terms[:, :, 2] * weights
-            g1 = (-0.5 * self.cs[None, :, 1]) * terms[:, :, 0] * terms[:, :, 2] * weights
-            g2 = (-0.5 * self.cs[None, :, 2]) * terms[:, :, 0] * terms[:, :, 1] * weights
-
-            w_off = (np.arange(self.w_size)[:, None, None] * self.nv)
-            cv_flat = (self.cv[None, :, :] + w_off).flatten()
-            grad = np.bincount(cv_flat, weights=np.stack([g0,g1,g2], axis=2).flatten(), minlength=self.w_size*self.nv)
-            grad = grad.reshape(self.w_size, self.nv)
-
-            # 动力学更新
-            self.v = 0.82 * self.v - 0.18 * grad
-            self.z = np.clip(self.z + self.v, -1.0, 1.0)
-
-            # 黄金扰动逃逸 (Veto)
-            if step > 80 and len(self.history) == 40 and np.std(self.history) < 1e-4:
-                if self.kick_count < self.max_kicks:
-                    phase_shift = (self.kick_count + 1) * self.PHI
-                    kick_seq = ((np.arange(1, self.w_size * self.nv + 1) * self.PHI + phase_shift) % 1.0)
-                    self.v += (kick_seq * 0.8 - 0.4).reshape(self.w_size, self.nv)
-                    self.z = np.clip(self.z + self.v, -1.0, 1.0)
-                    self.kick_count += 1; self.history.clear() 
-                else:
-                    avg_v = np.mean(v_j, axis=0)
-                    core = [self.clauses[i] for i in np.argsort(avg_v)[-int(self.mc*0.15):]]
-                    return "UNSAT (拓扑阻挫)", step, time.time()-start_t, core
-        return "UNSAT (多项式超时)", self.max_steps, time.time()-start_t, None
-
-# ============================================================
-# 3. 终极复杂度基准测试框架
-# ============================================================
-def run_complexity_benchmark():
-    random.seed(42); np.random.seed(42)
-    benchmark_configs = [
-        ("相变 3-SAT (Hard SAT)", gen_phase_transition_sat, 20),
-        ("鸽巢原理 (PHP Hard)", gen_php, 4),
-        ("Tseitin矛盾 (Topology Hard)", gen_tseitin, 8),
-        ("矛盾子集 (Dense MUF)", gen_muf, 4),
-        ("超相变随机 (Hard UNSAT)", gen_hard_unsat, 20)
-    ]
-
-    print("="*145)
-    print(f"🏆 N-FWTE 5.9 终极黄金版：P=NP 复杂度基准测试 (W_SIZE=64)")
-    print("="*145)
-    print(f"{'问题类型':<28} | {'运行':<4} | {'N':<8} | {'M':<8} | {'预期':<6} | {'判定结果':<25} | {'步数':<10} | {'耗时':<10} | {'状态'}")
-    print("-"*145)
-
-    for name, gen_func, base_n in benchmark_configs:
-        for run in range(1, 4):
-            # N 指数级增长: N, 2N, 4N
-            n_val = base_n * (2**(run-1))
-            n, m, clauses, truth = gen_func(n_val)
-            
-            solver = NFWTESolver(n, m, clauses)
-            res, steps, dur, core = solver.solve()
-            
-            success = "✅" if truth in res else "❌"
-            print(f"{name:<28} | {run:<4} | {n:<8} | {m:<8} | {truth:<6} | {res:<25} | {steps:<10} | {dur:>8.3f}s | {success}")
-            if core: print(f"    └─ 黄金识别矛盾核心规模: {len(core)} 子句")
-
-    print("="*145)
-    print("测试结论：若步数与 N 呈线性/多项式增长且正确率 100%，则 P=NP 在此范式下获得实验确证。")
-
-if __name__ == "__main__":
-    run_complexity_benchmark()
-```
-
----
-
-```python
-import numpy as np
-import time
-import random
-from collections import deque
-from itertools import product, combinations
-
-# ============================================================
-# 1. 核心数学工具与硬核矛盾生成器 (线性优化版)
-# ============================================================
-class AuxCounter:
-    def __init__(self, base): self.val = base
-    def next(self):
-        v = self.val
-        self.val += 1
-        return v
-
-def unit_to_3cnf(v1, p1, aux):
-    y1, y2 = aux.next(), aux.next()
-    return [([v1, y1, y2], [p1, b1, b2]) for b1, b2 in product([0.0, 1.0], repeat=2)]
-
-def two_lit_to_3cnf(v1, p1, v2, p2, aux):
-    y = aux.next()
-    return [([v1, v2, y], [p1, p2, 0.0]), ([v1, v2, y], [p1, p2, 1.0])]
-
-def _reduce_to_3cnf(lits, clauses, aux):
-    """极速 3-CNF 折叠：使用 O(1) 的尾部 pop 替代 O(n) 的 pop(0)"""
-    while len(lits) > 3:
-        v1, p1 = lits.pop(); v2, p2 = lits.pop()
-        y = aux.next()
-        clauses.append(([v1, v2, y], [p1, p2, 0.0]))
-        lits.append((y, 1.0))
-    if len(lits) == 3: 
-        clauses.append(([l[0] for l in lits], [l[1] for l in lits]))
-    elif len(lits) == 2: 
-        clauses.extend(two_lit_to_3cnf(lits[0][0], lits[0][1], lits[1][0], lits[1][1], aux))
-    elif len(lits) == 1:
-        clauses.extend(unit_to_3cnf(lits[0][0], lits[0][1], aux))
-
-# [问题1] 随机相变点 3-SAT
-def gen_phase_transition_sat(n):
-    m = int(n * 4.26)
-    clauses = [ (random.sample(range(n), 3), [float(random.randint(0, 1)) for _ in range(3)]) for _ in range(m)]
-    return n, m, clauses, "SAT"
-
-# [问题2] 鸽巢原理 (PHP) - 优化弹栈
-def gen_php(n_holes):
-    n_pigeons = n_holes + 1
-    n_vars = n_pigeons * n_holes
-    aux = AuxCounter(n_vars); clauses = []; p = lambda i, j: i * n_holes + j
-    for i in range(n_pigeons):
-        lits = [(p(i, j), 0.0) for j in range(n_holes)]
-        _reduce_to_3cnf(lits, clauses, aux)
-    for j in range(n_holes):
-        for i1, i2 in combinations(range(n_pigeons), 2):
-            clauses.extend(two_lit_to_3cnf(p(i1, j), 1.0, p(i2, j), 1.0, aux))
-    return aux.val, len(clauses), clauses, "UNSAT"
-
-# [问题3] Tseitin 矛盾 - 优化拓扑构造
-def gen_tseitin(n_nodes):
-    n = n_nodes if n_nodes % 2 == 0 else n_nodes + 1
-    edges = list(set(tuple(sorted((i, (i+d)%n))) for i in range(n) for d in (1, n//2)))
-    m_vars = len(edges); adj = [[] for _ in range(n)]
-    for i, (u, v) in enumerate(edges): adj[u].append(i); adj[v].append(i)
-    aux = AuxCounter(m_vars); clauses = []
-    for i in range(n):
-        target = 1 if i == 0 else 0
-        v_edges = adj[i]
-        for bits in product([0, 1], repeat=len(v_edges)):
-            if sum(bits) % 2 != target:
-                lits = [(v_edges[j], float(bits[j])) for j in range(len(v_edges))]
-                _reduce_to_3cnf(lits, clauses, aux)
-    return aux.val, len(clauses), clauses, "UNSAT"
-
-# [问题4] 链式密集矛盾 (Chain-MUF) - 线性空间拓扑链
-def gen_muf(n):
-    block_size = min(n, 4); aux = AuxCounter(n); clauses = []
-    for i in range(0, max(1, n - block_size + 1), 2):
-        vars_in_block = list(range(i, min(i + block_size, n)))
-        if len(vars_in_block) < 3: continue
-        for bits in product([0.0, 1.0], repeat=len(vars_in_block)):
-            lits = [(vars_in_block[j], bits[j]) for j in range(len(vars_in_block))]
-            _reduce_to_3cnf(lits, clauses, aux)
-    return aux.val, len(clauses), clauses, "UNSAT"
-
-# [问题5] 超相变随机 UNSAT
-def gen_hard_unsat(n):
-    m = int(n * 5.0)
-    clauses = [ (random.sample(range(n), 3), [float(random.randint(0, 1)) for _ in range(3)]) for _ in range(m)]
-    return n, m, clauses, "UNSAT"
-
-# ============================================================
-# 2. N-FWTE 6.1 引擎 (极致内存优化版)
-# ============================================================
-class NFWTESolver:
-    def __init__(self, n_vars, n_clauses, clauses, w_size=64):
-        self.nv, self.mc, self.clauses = n_vars, n_clauses, clauses
-        self.w_size = w_size
-        self.max_steps = 100 * n_vars
-        self.cv = np.array([c[0] for c in clauses], dtype=np.int32)
-        self.cd = np.array([c[1] for c in clauses], dtype=np.float32)
-        self.cs = np.where(self.cd == 0, 1.0, -1.0).astype(np.float32)
-        self.PHI = 0.6180339887498949
-        seq = (np.arange(1, w_size * n_vars + 1) * self.PHI) % 1.0
-        self.z = (seq * 1.8 - 0.9).reshape(w_size, n_vars)
-        self.v = np.zeros_like(self.z); self.history = deque(maxlen=40)
-        self.kick_count = 0; self.max_kicks = 4
-
-    def verify_stress_path(self, core_indices, avg_v):
-        """极速 O(1) 哈希消解验证器"""
-        sorted_core_idx = sorted(core_indices, key=lambda i: avg_v[i], reverse=True)
-        
-        # 1. 核心优化：使用 frozenset 使子句可哈希，使用 set() 实现 O(1) 去重
-        clause_set = set()
-        for i in sorted_core_idx:
-            cv, cd = self.clauses[i]
-            cl = frozenset(int((v + 1) * (1 if p == 1.0 else -1)) for v, p in zip(cv, cd))
-            clause_set.add(cl)
-            
-        var_stress = np.zeros(self.nv)
-        for i in sorted_core_idx:
-            for v in self.clauses[i][0]: var_stress[v] += avg_v[i]
-            
-        elim_order = np.argsort(var_stress)[::-1]
-        max_proof_width = len(sorted_core_idx) * 3 # 严格限制证明树宽度
-        
-        for var in elim_order:
-            if var_stress[var] == 0: continue
-            
-            p_var, n_var = var + 1, -(var + 1)
-            pos, neg, others = [], [], []
-            
-            for c in clause_set:
-                if p_var in c: pos.append(c)
-                elif n_var in c: neg.append(c)
-                else: others.append(c)
-                
-            if not pos or not neg: 
-                clause_set = set(pos + neg + others)
-                continue
-                
-            new_clauses = set()
-            # 2. 定向消解与爆炸保护
-            for cp in pos:
-                for cn in neg:
-                    # frozenset 的极速集合运算
-                    res = (cp | cn) - frozenset({p_var, n_var})
-                    
-                    # 排除重言式
-                    if not any(-lit in res for lit in res):
-                        if len(res) == 0: return True, len(clause_set)
-                        new_clauses.add(res)
-                        
-                        # 爆炸熔断：如果单步产生超过 1000 个衍生子句，强制截断
-                        if len(new_clauses) > 1000: break
-                if len(new_clauses) > 1000: break
-                
-            # O(1) 集合合并去重
-            clause_set = set(others) | new_clauses
-            
-            # 3. 物理剪枝：强制保持证明路径狭窄
-            if len(clause_set) > max_proof_width:
-                clause_set = set(sorted(list(clause_set), key=len)[:max_proof_width])
-                
-        return False, len(clause_set)
-
-    def solve(self):
-        start_t = time.time()
-        for step in range(1, self.max_steps + 1):
-            terms = 0.5 * (1.0 - self.cs[None, :, :] * self.z[:, self.cv])
-            v_j = np.prod(terms, axis=2); energies = np.sum(v_j, axis=1)
-            min_e = np.min(energies); self.history.append(min_e)
-            if min_e < 0.3:
-                best_idx = np.argmin(energies); sols = (self.z[best_idx] > 0).astype(float)
-                if np.all(np.any(sols[self.cv] != self.cd, axis=1)):
-                    return "SAT (基态坍缩)", step, time.time()-start_t, None, False
-            
-            # 非厄米权重场
-            weights = np.exp(v_j * 4.0) 
-            weights /= (np.mean(weights, axis=1, keepdims=True) + 1e-9)
-            
-            # 极速梯度算子：分离 bincount 累加
-            g0 = (-0.5 * self.cs[None, :, 0]) * terms[:, :, 1] * terms[:, :, 2] * weights
-            g1 = (-0.5 * self.cs[None, :, 1]) * terms[:, :, 0] * terms[:, :, 2] * weights
-            g2 = (-0.5 * self.cs[None, :, 2]) * terms[:, :, 0] * terms[:, :, 1] * weights
-
-            w_off = (np.arange(self.w_size)[:, None] * self.nv)
-            cv0_flat = (self.cv[None, :, 0] + w_off).flatten()
-            cv1_flat = (self.cv[None, :, 1] + w_off).flatten()
-            cv2_flat = (self.cv[None, :, 2] + w_off).flatten()
-
-            grad_flat = np.bincount(cv0_flat, weights=g0.flatten(), minlength=self.w_size*self.nv)
-            grad_flat += np.bincount(cv1_flat, weights=g1.flatten(), minlength=self.w_size*self.nv)
-            grad_flat += np.bincount(cv2_flat, weights=g2.flatten(), minlength=self.w_size*self.nv)
-            grad = grad_flat.reshape(self.w_size, self.nv)
-
-            self.v = 0.82 * self.v - 0.18 * grad
-            self.z = np.clip(self.z + self.v, -1.0, 1.0)
-            
-            if step > 80 and len(self.history) == 40 and np.std(self.history) < 1e-4:
-                if self.kick_count < self.max_kicks:
-                    phase_shift = (self.kick_count + 1) * self.PHI
-                    kick_seq = ((np.arange(1, self.w_size * self.nv + 1) * self.PHI + phase_shift) % 1.0)
-                    self.v += (kick_seq * 0.8 - 0.4).reshape(self.w_size, self.nv); self.z = np.clip(self.z + self.v, -1.0, 1.0)
-                    self.kick_count += 1; self.history.clear() 
-                else:
-                    avg_v = np.mean(v_j, axis=0); core_idx = np.argsort(avg_v)[-int(self.mc*0.15):]
-                    is_verified, _ = self.verify_stress_path(core_idx, avg_v)
-                    return "UNSAT (拓扑阻挫)", step, time.time()-start_t, core_idx, is_verified
-        return "UNSAT (超时)", self.max_steps, time.time()-start_t, None, False
-
-# ============================================================
-# 3. 终极基准测试
-# ============================================================
-def run_benchmark():
-    random.seed(42); np.random.seed(42)
-    benchmark_configs = [
-        ("相变 3-SAT (Hard SAT)", gen_phase_transition_sat, 25),
-        ("鸽巢原理 (PHP Hard)", gen_php, 6),
-        ("Tseitin矛盾 (Topology Hard)", gen_tseitin, 10),
-        ("矛盾子集 (Dense MUF)", gen_muf, 10),
-        ("超相变随机 (Hard UNSAT)", gen_hard_unsat, 25)
-    ]
-    print("="*155)
-    print(f"🏆 N-FWTE 6.1 内存优化版：P=NP 极限复杂度测试")
-    print("="*155)
-    print(f"{'问题类型':<28} | {'N':<6} | {'M':<6} | {'预期':<6} | {'判定结果':<25} | {'步数':<8} | {'耗时':<8} | {'形式化证明'}")
-    print("-"*155)
-    for name, gen_func, base_n in benchmark_configs:
-        for run in range(1, 4):
-            n_val = base_n * (2**(run-1))
-            n, m, clauses, truth = gen_func(n_val)
-            solver = NFWTESolver(n, m, clauses)
-            res, steps, dur, core, verified = solver.solve()
-            success = "✅" if truth in res else "❌"
-            proof_status = "【空子句 ∅ 推导成功】" if verified else "---"
-            print(f"{name:<28} | {n:<6} | {m:<6} | {truth:<6} | {res:<25} | {steps:<8} | {dur:>7.3f}s | {proof_status} {success}")
-    print("="*155)
-
-if __name__ == "__main__":
-    run_benchmark()
-```
-
-===========================================================================================================================================================
-🏆 N-FWTE 6.1 内存优化版：P=NP 极限复杂度测试
-===========================================================================================================================================================
-问题类型                         | N      | M      | 预期     | 判定结果                      | 步数       | 耗时       | 形式化证明
------------------------------------------------------------------------------------------------------------------------------------------------------------
-相变 3-SAT (Hard SAT)          | 25     | 106    | SAT    | SAT (基态坍缩)                | 10       |   0.007s | --- ✅
-相变 3-SAT (Hard SAT)          | 50     | 213    | SAT    | SAT (基态坍缩)                | 20       |   0.021s | --- ✅
-相变 3-SAT (Hard SAT)          | 100    | 426    | SAT    | UNSAT (拓扑阻挫)              | 577      |   1.277s | --- ✅
-鸽巢原理 (PHP Hard)              | 189    | 280    | UNSAT  | UNSAT (拓扑阻挫)              | 470      |   0.880s | --- ✅
-鸽巢原理 (PHP Hard)              | 1209   | 2002   | UNSAT  | UNSAT (拓扑阻挫)              | 467      |   6.865s | --- ✅
-鸽巢原理 (PHP Hard)              | 8325   | 14950  | UNSAT  | UNSAT (拓扑阻挫)              | 672      |  91.752s | --- ✅
-Tseitin矛盾 (Topology Hard)    | 15     | 40     | UNSAT  | UNSAT (拓扑阻挫)              | 542      |   0.187s | --- ✅
-Tseitin矛盾 (Topology Hard)    | 30     | 80     | UNSAT  | UNSAT (拓扑阻挫)              | 661      |   0.367s | --- ✅
-Tseitin矛盾 (Topology Hard)    | 60     | 160    | UNSAT  | UNSAT (拓扑阻挫)              | 593      |   0.524s | --- ✅
-矛盾子集 (Dense MUF)             | 74     | 128    | UNSAT  | UNSAT (拓扑阻挫)              | 301      |   0.221s | --- ✅
-矛盾子集 (Dense MUF)             | 164    | 288    | UNSAT  | UNSAT (拓扑阻挫)              | 305      |   0.481s | --- ✅
-矛盾子集 (Dense MUF)             | 344    | 608    | UNSAT  | UNSAT (拓扑阻挫)              | 304      |   0.978s | --- ✅
-超相变随机 (Hard UNSAT)           | 25     | 125    | UNSAT  | SAT (基态坍缩)                | 9        |   0.006s | --- ❌
-超相变随机 (Hard UNSAT)           | 50     | 250    | UNSAT  | UNSAT (拓扑阻挫)              | 649      |   1.104s | --- ✅
-超相变随机 (Hard UNSAT)           | 100    | 500    | UNSAT  | UNSAT (拓扑阻挫)              | 714      |   2.382s | --- ✅
-===========================================================================================================================================================
-
----
-
-```python
-# =====================================================================
-# 连续自旋流形 3-SAT 求解器 - 物理相变区测试 (Phase Transition Test)
-# 架构师：跨学科 AI 助手
-# 实验员：用户 (PI)
-# =====================================================================
-
-import numpy as np
-import random
-import time
-
-class ContinuousSpin3SATSolver:
-    def __init__(self, num_vars, clauses, num_workers=128, 
-                 eta=0.05, mu=0.9, tau=50, max_steps=5000):
-        self.n = num_vars
-        self.m = len(clauses)
-        self.W = num_workers
-        self.eta = eta
-        self.mu = mu
-        self.tau = tau
-        self.max_steps = max_steps
-        
-        self.idx_matrix = np.zeros((self.m, 3), dtype=int)
-        self.polarity_matrix = np.zeros((self.m, 3), dtype=float)
-        self._parse_clauses(clauses)
-        
-        self.Z = self._holographic_initialization()
-        self.v = np.zeros((self.W, self.n)) 
-        
-        self.best_Z = np.copy(self.Z)
-        self.min_H = np.full(self.W, np.inf)
-        self.H_history = []
-        self.stress_tensor = np.zeros(self.m)
-        
-    def _parse_clauses(self, clauses):
-        for j, clause in enumerate(clauses):
-            for k, literal in enumerate(clause):
-                self.idx_matrix[j, k] = abs(literal) - 1
-                self.polarity_matrix[j, k] = 1.0 if literal > 0 else -1.0
-
-    def _holographic_initialization(self):
-        base_Z = np.linspace(-1, 1, self.W).reshape(self.W, 1) * np.ones((1, self.n))
-        w_indices = np.arange(self.W).reshape(self.W, 1)
-        i_indices = np.arange(self.n).reshape(1, self.n)
-        harmonic_perturbation = 0.01 * np.sin(2 * np.pi * w_indices * i_indices / max(self.n, 1))
-        return np.clip(base_Z + harmonic_perturbation, -1.0, 1.0)
-
-    def _compute_energy_and_gradient(self, Z):
-        Z_indexed = Z[:, self.idx_matrix]
-        E = 0.5 * (1.0 - self.polarity_matrix * Z_indexed)
-        V = np.prod(E, axis=2)
-        H = np.sum(V, axis=1)
-        
-        grad_Z = np.zeros((self.W, self.n))
-        for k in range(3):
-            other_indices = [idx for idx in range(3) if idx != k]
-            partial_V = -0.5 * self.polarity_matrix[:, k] * E[:, :, other_indices[0]] * E[:, :, other_indices[1]]
-            for w in range(self.W):
-                np.add.at(grad_Z[w], self.idx_matrix[:, k], partial_V[w])
-                
-        return H, V, grad_Z
-
-    def _deterministic_veto_collapse(self, step):
-        if step < self.tau: return
-        H_current = self.H_history[-1]
-        H_past = self.H_history[-self.tau]
-        delta_H = H_past - H_current
-        stagnant_mask = (delta_H < 1e-4) & (H_current > 1e-5)
-        
-        if np.any(stagnant_mask):
-            i_indices = np.arange(self.n)
-            delta_shift = 0.5 * np.sin(2 * np.pi * i_indices / self.n)
-            for w in range(self.W):
-                if stagnant_mask[w]:
-                    self.Z[w] = np.clip(self.best_Z[w] + delta_shift, -1.0, 1.0)
-                    self.v[w] = 0.0 
-
-    def solve(self):
-        start_time = time.time()
-        for step in range(self.max_steps):
-            H, V, grad_Z = self._compute_energy_and_gradient(self.Z)
-            self.H_history.append(H)
-            improvement_mask = H < self.min_H
-            self.min_H[improvement_mask] = H[improvement_mask]
-            self.best_Z[improvement_mask] = self.Z[improvement_mask]
-            
-            # 每 100 步打印一次系统状态 (遥测信号)
-            if step % 100 == 0:
-                print(f"-> 演化步数 {step:4d} | 全息波阵面最低能量(H): {np.min(self.min_H):.4f}")
-            
-            if np.any(self.min_H < 1e-4):
-                winner_idx = np.argmin(self.min_H)
-                solution = np.where(self.best_Z[winner_idx] > 0, 1, -1)
-                time_cost = time.time() - start_time
-                print(f"\n[SAT 发现!] 拓扑流在第 {step} 步坍缩至绝对基态。")
-                print(f"耗时: {time_cost:.3f} 秒")
-                return True, solution
-
-            self.stress_tensor += np.sum(V, axis=0)
-            self._deterministic_veto_collapse(step)
-            self.v = self.mu * self.v - self.eta * grad_Z
-            self.Z = np.clip(self.Z + self.v, -1.0, 1.0)
-            
-        time_cost = time.time() - start_time
-        print(f"\n[UNSAT/阻挫] 演化达到上限 {self.max_steps} 步。耗时: {time_cost:.3f} 秒")
-        return False, self._extract_unsat_core()
-
-    def _extract_unsat_core(self):
-        mean_stress = self.stress_tensor / (self.W * self.max_steps)
-        threshold = np.mean(mean_stress) + np.std(mean_stress)
-        core_indices = np.where(mean_stress > threshold)[0]
-        return core_indices
-
-# ================= 工具函数：生成随机 3-SAT 问题 =================
-def generate_random_3sat(n_vars, ratio_m_n):
-    m_clauses = int(n_vars * ratio_m_n)
-    clauses = []
-    for _ in range(m_clauses):
-        # 随机挑选 3 个不同的变量
-        vars_in_clause = random.sample(range(1, n_vars + 1), 3)
-        # 随机赋予正负极性
-        clause = [v if random.random() > 0.5 else -v for v in vars_in_clause]
-        clauses.append(clause)
-    return m_clauses, clauses
-
-# ================= 启动实验 =================
-if __name__ == "__main__":
-    print("==================================================")
-    print("启动连续自旋流形 3-SAT 求解引擎...")
-    print("==================================================\n")
-    
-    # 实验设置：我们选取 50 个变量，处于相变区 4.26
-    # 这是一个足以让普通的暴力算法崩溃，但仍在现代计算机能力范围内的难题
-    N_VARS = 50
-    RATIO = 4.26 
-    
-    print(f"[参数设置] 变量数 n = {N_VARS}, 难度比率 = {RATIO} (极难相变区)")
-    m_clauses, clauses = generate_random_3sat(N_VARS, RATIO)
-    print(f"[模型构建] 自动生成 {m_clauses} 个逻辑约束子句...\n")
-    
-    # 实例化我们的黑科技求解器 (使用 256 个平行波阵面)
-    solver = ContinuousSpin3SATSolver(num_vars=N_VARS, clauses=clauses, 
-                                      num_workers=256, max_steps=2000)
-    
-    # 点火运行
-    is_sat, result = solver.solve()
-    
-    print("\n==================================================")
-    if is_sat:
-        print("[最终结论] 系统是 SAT (可满足的)！")
-        # print("解向量:", result) # 太长了先不打印具体解
-    else:
-        print("[最终结论] 系统陷入拓扑阻挫 (极大概率为 UNSAT)！")
-        print(f"检测到 {len(result)} 个高应力奇点 (核心矛盾子句)。")
-    print("==================================================")
-```
-
-==================================================
-启动连续自旋流形 3-SAT 求解引擎...
-==================================================
-
-[参数设置] 变量数 n = 50, 难度比率 = 4.26 (极难相变区)
-[模型构建] 自动生成 213 个逻辑约束子句...
-
--> 演化步数    0 | 全息波阵面最低能量(H): 23.0103
--> 演化步数  100 | 全息波阵面最低能量(H): 1.0000
--> 演化步数  200 | 全息波阵面最低能量(H): 1.0000
--> 演化步数  300 | 全息波阵面最低能量(H): 1.0000
--> 演化步数  400 | 全息波阵面最低能量(H): 1.0000
--> 演化步数  500 | 全息波阵面最低能量(H): 1.0000
--> 演化步数  600 | 全息波阵面最低能量(H): 1.0000
--> 演化步数  700 | 全息波阵面最低能量(H): 1.0000
--> 演化步数  800 | 全息波阵面最低能量(H): 1.0000
--> 演化步数  900 | 全息波阵面最低能量(H): 1.0000
--> 演化步数 1000 | 全息波阵面最低能量(H): 1.0000
--> 演化步数 1100 | 全息波阵面最低能量(H): 1.0000
--> 演化步数 1200 | 全息波阵面最低能量(H): 1.0000
--> 演化步数 1300 | 全息波阵面最低能量(H): 1.0000
--> 演化步数 1400 | 全息波阵面最低能量(H): 1.0000
--> 演化步数 1500 | 全息波阵面最低能量(H): 1.0000
--> 演化步数 1600 | 全息波阵面最低能量(H): 1.0000
--> 演化步数 1700 | 全息波阵面最低能量(H): 1.0000
--> 演化步数 1800 | 全息波阵面最低能量(H): 1.0000
--> 演化步数 1900 | 全息波阵面最低能量(H): 1.0000
-
-[UNSAT/阻挫] 演化达到上限 2000 步。耗时: 14.410 秒
-
-==================================================
-[最终结论] 系统陷入拓扑阻挫 (极大概率为 UNSAT)！
-检测到 31 个高应力奇点 (核心矛盾子句)。
-==================================================
 
 ---
 
