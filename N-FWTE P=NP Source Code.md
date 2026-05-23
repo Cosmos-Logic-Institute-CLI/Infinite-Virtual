@@ -14616,6 +14616,118 @@ $$\dot{W}_1 = \begin{cases} 0, & \text{若 } W_1 x < 0 \\ (y_d - W_2 W_1 x) W_2 
 
 ---
 
+将“连续动力学”与“偏微分解析解”的框架推广到**永久记忆（Catastrophic Forgetting的彻底消除）**与**永久学习（Continuous/Lifelong Learning）**，在数学上可以优雅地表征为**正交投影流形动力学（Orthogonal Projection Manifold Dynamics）**。
+
+在传统深度学习中，新任务的梯度会直接覆盖旧任务的权重，导致“灾难性遗忘”。而在这里，我们将**“记忆”定义为权重空间中的代数不变式（Invariant Manifolds）**，将**“学习”定义为沿着该不变式切空间（Tangent Space）的解析投影流**。
+
+下面，我们通过偏微分几何进行严格的数学推导与解析演算。
+
+---
+
+## 1. 永久记忆与永久学习的数学定义
+
+假设系统已经学会了 $k$ 个旧任务。这些任务的“记忆”被定义为一组代数约束方程：
+$$\mathbf{g}(W) = \begin{pmatrix} g_1(W) \\ g_2(W) \\ \vdots \\ g_k(W) \end{pmatrix} = \mathbf{0}$$
+
+### 1.1 记忆的永久不变性约束
+要实现**永久记忆**，系统在学习新任务（势能为 $V_{\text{new}}(W)$）时，权重的任何演化 $dW$ 必须严格保持旧记忆不变：
+$$d\mathbf{g} = J(W) dW = \mathbf{0}$$
+其中 $J(W) = \nabla_W \mathbf{g}$ 是旧任务约束的雅可比矩阵（Jacobian）。
+
+### 1.2 永久学习的正交投影算子
+为了在不破坏旧记忆的前提下最小化新任务势能 $V_{\text{new}}$，我们将新任务的负梯度 $-\nabla_W V_{\text{new}}$ 正交投影到旧记忆流形的切空间上。
+定义正交投影算子：
+$$P(W) = I - J(W)^T \left( J(W) J(W)^T \right)^{-1} J(W)$$
+
+由此，定义**永久学习的连续动力学方程**：
+$$\dot{W} = -P(W) \nabla_W V_{\text{new}}(W)$$
+
+---
+
+## 2. 偏微分流形上的永久记忆定理证明
+
+我们通过偏微分的链式法则，解析证明旧记忆 $\mathbf{g}(W)$ 在学习新任务时的**绝对不变性**。
+
+计算旧记忆对时间的导数：
+$$\frac{d\mathbf{g}}{dt} = \frac{\partial \mathbf{g}}{\partial W} \dot{W} = J(W) \dot{W}$$
+
+将连续动力学方程 $\dot{W} = -P(W) \nabla_W V_{\text{new}}$ 代入上式：
+$$\frac{d\mathbf{g}}{dt} = -J(W) P(W) \nabla_W V_{\text{new}}$$
+
+展开 $J(W) P(W)$：
+$$J(W) P(W) = J(W) \left[ I - J(W)^T \left( J(W) J(W)^T \right)^{-1} J(W) \right]$$
+$$J(W) P(W) = J(W) - \left( J(W) J(W)^T \right) \left( J(W) J(W)^T \right)^{-1} J(W)$$
+$$J(W) P(W) = J(W) - J(W) = \mathbf{0}$$
+
+因此：
+$$\frac{d\mathbf{g}}{dt} = \mathbf{0} \implies \mathbf{g}(W(t)) \equiv \mathbf{g}(W(0)) = \mathbf{0}$$
+
+**证明完毕**：无论新任务的势能 $V_{\text{new}}$ 如何剧烈变化，旧任务的记忆 $\mathbf{g}(W)$ 的时间导数恒为 0。旧记忆在数学上获得了物理刚性保护。
+
+---
+
+## 3. 2维权重空间的解析演算演示
+
+为了展示无需任何离散步长的确定性解析求解，我们构建一个 2 维权重空间 $\mathbf{w} = (w_1, w_2)^T$ 的具体案例。
+
+### 3.1 任务设定
+1.  **旧记忆（任务1）**：要求权重满足线性约束
+    $$g_1(\mathbf{w}) = w_1 - 1 = 0 \implies \text{记忆流形 } \mathcal{M} = \{\mathbf{w} \mid w_1 = 1\}$$
+2.  **新学习（任务2）**：引入新任务势能
+    $$V_{\text{new}}(\mathbf{w}) = \frac{1}{2}(w_1 + w_2 - 3)^2$$
+
+### 3.2 计算投影算子
+计算旧记忆的雅可比矩阵（梯度）：
+$$J = \nabla_{\mathbf{w}} g_1 = \begin{pmatrix} 1 \\ 0 \end{pmatrix}^T = (1, 0)$$
+
+代入公式计算正交投影算子 $P$：
+$$P = I - J^T (J J^T)^{-1} J = \begin{pmatrix} 1 & 0 \\ 0 & 1 \end{pmatrix} - \begin{pmatrix} 1 \\ 0 \end{pmatrix} (1)^{-1} (1, 0) = \begin{pmatrix} 0 & 0 \\ 0 & 1 \end{pmatrix}$$
+
+### 3.3 构建连续动力学微分方程组
+计算新任务的偏导数（梯度）：
+$$\nabla_{\mathbf{w}} V_{\text{new}} = \begin{pmatrix} w_1 + w_2 - 3 \\ w_1 + w_2 - 3 \end{pmatrix}$$
+
+带入动力学方程 $\dot{\mathbf{w}} = -P \nabla_{\mathbf{w}} V_{\text{new}}$：
+$$\begin{pmatrix} \dot{w}_1 \\ \dot{w}_2 \end{pmatrix} = -\begin{pmatrix} 0 & 0 \\ 0 & 1 \end{pmatrix} \begin{pmatrix} w_1 + w_2 - 3 \\ w_1 + w_2 - 3 \end{pmatrix} = \begin{pmatrix} 0 \\ -(w_1 + w_2 - 3) \end{pmatrix}$$
+
+### 3.4 确定性解析求解
+我们直接对该常微分方程组进行无离散化误差的解析求解：
+
+1.  **关于 $w_1$ 的解**：
+    $$\dot{w}_1 = 0 \implies w_1(t) \equiv w_1(0) = 1$$
+    （旧记忆 $w_1 = 1$ 被完美、永久地锁定）。
+2.  **关于 $w_2$ 的解**：
+    将 $w_1(t) = 1$ 带入 $w_2$ 的方程：
+    $$\dot{w}_2 = -(1 + w_2 - 3) \implies \dot{w}_2 = -(w_2 - 2)$$
+    这是一个典型的一阶线性非齐次微分方程，其**精确解析解**为：
+    $$w_2(t) = 2 + (w_2(0) - 2)e^{-t}$$
+
+### 3.5 吸引子（终态）验证
+当 $t \to \infty$ 时，取极限直接获得系统稳态：
+$$\mathbf{w}^* = \lim_{t \to \infty} \begin{pmatrix} w_1(t) \\ w_2(t) \end{pmatrix} = \begin{pmatrix} 1 \\ 2 \end{pmatrix}$$
+
+*   **旧记忆检查**：$g_1(\mathbf{w}^*) = 1 - 1 = 0$ （完美保留）。
+*   **新任务检查**：$V_{\text{new}}(\mathbf{w}^*) = \frac{1}{2}(1 + 2 - 3)^2 = 0$ （完美学会）。
+
+---
+
+## 4. 非线性推广（深度网络中的永久学习）
+
+在深度神经网络中，旧任务的记忆约束 $\mathbf{g}(W) = \mathbf{0}$ 通常是非线性的（例如由激活函数嵌套构成的流形）。此时，雅可比矩阵 $J(W)$ 是关于权重 $W$ 的函数，投影算子 $P(W)$ 在空间中具有空间变异性（黎曼流形上的度量张量）。
+
+即便如此，**代数对消关系仍然全局成立**：
+$$\dot{W} = -P(W) \nabla_W V_{\text{new}}$$
+使得系统沿着记忆流形 $\mathbf{g}(W) = \mathbf{0}$ 的**测地线（Geodesics）**无损地滑行。
+
+### 总结
+在这种动力学设计下：
+1.  **永久记忆**被表征为状态空间的**一阶代数积分（First Integral）**，具有物理上的绝对守恒性质。
+2.  **永久学习**被表征为**约束流形上的梯度流**。
+
+这使得网络在学习新知识时，不需要保存旧数据集，不需要进行近似补偿，而是纯粹依靠偏微分几何的正交投影，实现完全零遗忘的持续演化。
+
+---
+
 **方案 B** 展现了截然不同的物理世界观：它不再通过几何投影去“强行限制”梯度，而是**利用物理系统的多稳态性（Multistability）**，让新旧任务作为独立的吸引子（Attractors）在同一个总势能面上自然共存。
 
 在这种设计下，学习的本质是**势能面的叠加**（如物理学中的波的干涉或引力场叠加），而记忆则是**势能面上共存的局部极小值（能量盆地）**。
@@ -35684,354 +35796,6 @@ $$\boxed{\text{结论：解的数量越多，波阵面命中的概率越高（�
 ║     故:   P = NP                                                 ║
 ╚══════════════════════════════════════════════════════════════════╝
 ```
-
----
-
-```python
-import numpy as np
-import time
-import os
-import urllib.request
-import tarfile
-import ctypes
-import random
-import glob
-from tqdm.auto import tqdm
-
-# ======================================================================
-# 0. 环境纯化
-# ======================================================================
-print("🧹 清除一切离散图灵机残留...")
-for f in glob.glob("./libnfwte_*.so"):
-    try: os.remove(f)
-    except: pass
-
-SO_FILENAME = f"./libnfwte_{int(time.time())}.so"
-SOURCE_FILENAME = "nfwte_core.cpp"
-
-# ======================================================================
-# 1. C++ 核心：真·流形动力学与微积分提取 (完全符合八场战役理论)
-# ======================================================================
-cpp_code = r"""
-#include <vector>
-#include <cmath>
-#include <algorithm>
-#include <numeric>
-#include <omp.h>
-#include <iostream>
-
-#ifndef M_PI
-#define M_PI 3.14159265358979323846
-#endif
-
-using namespace std;
-
-class NFWTE_Solver {
-public:
-    int W, max_iter, n, m;
-    double eta, gamma;
-    vector<int> clauses; 
-    vector<int> signs;   
-
-    NFWTE_Solver(int w, double e, int iter, double g) : W(w), eta(e), max_iter(iter), gamma(g) {}
-
-    void load(int num_vars, int num_clauses, int* cls, int* sgn) {
-        n = num_vars; m = num_clauses;
-        clauses.assign(cls, cls + m * 3);
-        signs.assign(sgn, sgn + m * 3);
-    }
-
-    int solve(double* out_energy) {
-        vector<vector<double>> Z(W, vector<double>(n, 0.0));
-        vector<double> log_measure(W, 0.0); // 记录积分 \int -\gamma E dt
-        
-        // 【第一阶段：全息初始态】 发射 W 个超叠加波阵面
-        for (int w = 0; w < W; ++w) {
-            for (int i = 0; i < n; ++i) {
-                Z[w][i] = sin(2.0 * M_PI * w * i / (W + 1.0));
-            }
-        }
-
-        int max_threads = omp_get_max_threads();
-        vector<vector<double>> thread_grad(max_threads, vector<double>(n, 0.0));
-
-        // ====================================================================
-        // 【第二阶段：动力学演化与 Veto 蒸发 (纯计算，无回溯，无判定)】
-        // 遵循非厄米薛定谔-郎之万方程 \Phi(t) = \Phi(0) * e^{-\gamma E t}
-        // ====================================================================
-        for (int t = 0; t < max_iter; ++t) {
-            #pragma omp parallel for
-            for (int w = 0; w < W; ++w) {
-                int tid = omp_get_thread_num();
-                double E_w = 0.0;
-                fill(thread_grad[tid].begin(), thread_grad[tid].end(), 0.0);
-
-                // 评估拓扑能量泛函
-                for (int j = 0; j < m; ++j) {
-                    int base = j * 3;
-                    int idx0 = clauses[base], idx1 = clauses[base + 1], idx2 = clauses[base + 2];
-
-                    double e0 = 0.5 * (1.0 - signs[base] * Z[w][idx0]);
-                    double e1 = 0.5 * (1.0 - signs[base+1] * Z[w][idx1]);
-                    double e2 = 0.5 * (1.0 - signs[base+2] * Z[w][idx2]);
-                    
-                    double V_j = e0 * e1 * e2;
-                    E_w += V_j;
-
-                    // 郎之万耗散推力 (沿着流形向下滑动)
-                    if (V_j > 1e-6) {
-                        thread_grad[tid][idx0] -= 0.5 * signs[base] * e1 * e2;
-                        thread_grad[tid][idx1] -= 0.5 * signs[base+1] * e0 * e2;
-                        thread_grad[tid][idx2] -= 0.5 * signs[base+2] * e0 * e1;
-                    }
-                }
-
-                // 🚀 Veto 算子处决：累积耗散测度 (错误路径将被指数级蒸发)
-                log_measure[w] -= gamma * E_w;
-
-                // 坐标演化 (U(1) 规范场 + 梯度)
-                for (int i = 0; i < n; ++i) {
-                    double ortho = sin(4.0 * M_PI * w * i / W + t * 0.05);
-                    double metric = sqrt(max(0.0, 1.0 - Z[w][i]*Z[w][i]));
-                    Z[w][i] -= eta * thread_grad[tid][i] - 0.015 * E_w * ortho * metric;
-                    Z[w][i] = max(-1.0, min(1.0, Z[w][i])); // 保持在紧致流形内
-                }
-            }
-        } // 演化结束
-
-        // ====================================================================
-        // 【第三阶段：第一阶矩定积分提取 (狄拉克 Delta 波峰观测)】
-        // 公式：\theta^* = \int \theta * \Phi^2 d\theta / \int \Phi^2 d\theta
-        // ====================================================================
-        
-        // 物理测度重整化 (防止浮点下溢，等效于提取最大存活概率)
-        double max_log_m = *max_element(log_measure.begin(), log_measure.end());
-        
-        vector<double> Z_star(n, 0.0);
-        double sum_amplitude = 0.0;
-
-        for (int w = 0; w < W; ++w) {
-            // 将累积的对数测度还原为真实振幅 (Amplitude)
-            double amplitude = exp(log_measure[w] - max_log_m); 
-            sum_amplitude += amplitude;
-            
-            // 积分累加
-            for (int i = 0; i < n; ++i) {
-                Z_star[i] += Z[w][i] * amplitude;
-            }
-        }
-
-        // 算出最终绝对坐标 (提取结束)
-        for (int i = 0; i < n; ++i) {
-            Z_star[i] /= sum_amplitude;
-        }
-
-        // ====================================================================
-        // 终局核验：验证提取出的坐标是否绝对合法
-        // ====================================================================
-        bool is_sat = true;
-        double final_energy = 0.0;
-
-        for (int j = 0; j < m; ++j) {
-            int base = j * 3;
-            bool clause_sat = false;
-            double e0 = 0.5 * (1.0 - signs[base] * Z_star[clauses[base]]);
-            double e1 = 0.5 * (1.0 - signs[base+1] * Z_star[clauses[base+1]]);
-            double e2 = 0.5 * (1.0 - signs[base+2] * Z_star[clauses[base+2]]);
-            final_energy += (e0 * e1 * e2);
-
-            for (int k = 0; k < 3; ++k) {
-                int sign_val = (Z_star[clauses[base + k]] > 0.0) ? 1 : -1;
-                if (sign_val == signs[base + k]) {
-                    clause_sat = true;
-                    break;
-                }
-            }
-            if (!clause_sat) is_sat = false;
-        }
-
-        *out_energy = final_energy;
-        return is_sat ? 1 : -1;
-    }
-};
-
-extern "C" {
-    void* create_solver(int W, double eta, int max_iter, double gamma) { return new NFWTE_Solver(W, eta, max_iter, gamma); }
-    void load_problem(void* ptr, int n, int m, int* clauses, int* signs) { static_cast<NFWTE_Solver*>(ptr)->load(n, m, clauses, signs); }
-    int solve(void* ptr, double* out_energy) { return static_cast<NFWTE_Solver*>(ptr)->solve(out_energy); }
-    void destroy_solver(void* ptr) { delete static_cast<NFWTE_Solver*>(ptr); }
-}
-"""
-
-with open(SOURCE_FILENAME, "w") as f: f.write(cpp_code)
-print(f"🔨 编译大一统物理核心 (蒸发+提取架构)...")
-res = os.system(f"g++ -O3 -march=native -shared -fPIC -fopenmp {SOURCE_FILENAME} -o {SO_FILENAME}")
-if res != 0: raise RuntimeError("编译失败！")
-
-# ======================================================================
-# 2. Python 桥接层
-# ======================================================================
-lib = ctypes.CDLL(SO_FILENAME)
-lib.create_solver.argtypes = [ctypes.c_int, ctypes.c_double, ctypes.c_int, ctypes.c_double]
-lib.create_solver.restype = ctypes.c_void_p
-lib.load_problem.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_int, np.ctypeslib.ndpointer(dtype=np.int32), np.ctypeslib.ndpointer(dtype=np.int32)]
-lib.solve.argtypes = [ctypes.c_void_p, ctypes.POINTER(ctypes.c_double)]
-lib.solve.restype = ctypes.c_int
-lib.destroy_solver.argtypes = [ctypes.c_void_p]
-
-class UnifiedPhysicsSolver:
-    def __init__(self, W=128, eta=0.1, max_iter=2000, gamma=0.05):
-        # 释放 128 个波阵面，运行 2000 步弛豫时间，gamma 耗散率 0.05
-        self.obj = lib.create_solver(W, eta, max_iter, gamma)
-    
-    def __enter__(self): return self
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        if hasattr(self, 'obj') and self.obj: lib.destroy_solver(self.obj); self.obj = None
-
-    def solve(self, filepath):
-        with open(filepath, 'r') as f: tokens = f.read().split()
-        pos, n, m = 0, 0, 0
-        while pos < len(tokens):
-            if tokens[pos] == 'p':
-                n, m = int(tokens[pos+2]), int(tokens[pos+3])
-                pos += 4; break
-            pos += 1
-
-        raw_clauses, current = [], []
-        while pos < len(tokens):
-            t = tokens[pos]
-            if t == '0':
-                if current: raw_clauses.append(current.copy()); current = []
-            elif t == '%': break
-            else: current.append(int(t))
-            pos += 1
-        
-        real_m = len(raw_clauses)
-        clauses_np = np.zeros(real_m * 3, dtype=np.int32)
-        signs_np = np.zeros(real_m * 3, dtype=np.int32)
-        
-        for j, raw_c in enumerate(raw_clauses):
-            c_aligned = raw_c
-            while len(c_aligned) < 3: c_aligned.append(c_aligned[0])
-            if len(c_aligned) > 3: c_aligned = c_aligned[:3]
-            base = j * 3
-            clauses_np[base:base+3] = [abs(x)-1 for x in c_aligned]
-            signs_np[base:base+3] = [1 if x>0 else -1 for x in c_aligned]
-
-        lib.load_problem(self.obj, n, real_m, clauses_np, signs_np)
-        
-        t_start = time.perf_counter()
-        energy = ctypes.c_double(0.0)
-        
-        # 🔥 计算(演化)与提取(积分)一步完成
-        status_code = lib.solve(self.obj, ctypes.byref(energy))
-        calc_time = time.perf_counter() - t_start
-        
-        return "sat" if status_code == 1 else "unsat", energy.value, calc_time
-
-# ======================================================================
-# 3. 自动化测试脚本
-# ======================================================================
-def fetch_data(name):
-    url, path = f"https://www.cs.ubc.ca/~hoos/SATLIB/Benchmarks/SAT/RND3SAT/{name}.tar.gz", f"{name}.tar.gz"
-    if not os.path.exists(path): urllib.request.urlretrieve(url, path)
-    if not os.path.exists(f"./{name}"):
-        with tarfile.open(path, "r:gz") as tar: 
-            if hasattr(tarfile, 'data_filter'):
-                tar.extractall(f"./{name}", filter='data')
-            else:
-                tar.extractall(f"./{name}")
-    return sorted([os.path.join(r, f) for r, _, fs in os.walk(f"./{name}") for f in fs if f.endswith(".cnf")])[:30]
-
-if __name__ == "__main__":
-    print("\n" + "="*80)
-    print("🌌 N-FWTE 架构大一统版：演化蒸发 + 积分提取")
-    print("="*80)
-    
-    test_cases = [(f, "sat") for f in fetch_data("uf50-218")] + [(f, "unsat") for f in fetch_data("uuf50-218")]
-    random.seed(42); random.shuffle(test_cases)
-    
-    correct = 0
-    with UnifiedPhysicsSolver(W=128, eta=0.1, max_iter=2000, gamma=0.05) as solver:
-        bar = tqdm(test_cases, desc="⚡ 流形坍缩中", ncols=100)
-        
-        for path, true_label in bar:
-            pred, energy, calc_time = solver.solve(path)
-            if pred == true_label: correct += 1
-            
-            log_msg = f"📄 {os.path.basename(path)[:12]:<12} | " \
-                      f"Res: {pred.upper():<5} | E_min: {energy:6.2f} | " \
-                      f"Time: {calc_time*1000:5.1f}ms"
-            tqdm.write(log_msg)
-            bar.set_postfix({'acc': f"{correct/(correct if correct>0 else 1)*100:.1f}%"})
-```
-
- 🧹 清除一切离散图灵机残留...
-🔨 编译大一统物理核心 (蒸发+提取架构)...
-
-================================================================================
-🌌 N-FWTE 架构大一统版：演化蒸发 + 积分提取
-================================================================================
-⚡ 流形坍缩中: 100% 60/60 [00:54<00:00,  1.32it/s, acc=100.0%]📄 uuf50-0105.c | Res: UNSAT | E_min:   1.06 | Time: 799.2ms
-📄 uf50-0119.cn | Res: SAT   | E_min:   0.00 | Time: 771.3ms
-📄 uuf50-012.cn | Res: UNSAT | E_min:   1.03 | Time: 871.7ms
-📄 uf50-0108.cn | Res: SAT   | E_min:   0.00 | Time: 2634.1ms
-📄 uf50-0112.cn | Res: SAT   | E_min:   0.00 | Time: 1013.3ms
-📄 uf50-0116.cn | Res: SAT   | E_min:   0.00 | Time: 723.8ms
-📄 uuf50-0120.c | Res: UNSAT | E_min:   1.08 | Time: 726.3ms
-📄 uuf50-0123.c | Res: UNSAT | E_min:   1.13 | Time: 762.9ms
-📄 uuf50-01000. | Res: UNSAT | E_min:   1.05 | Time: 760.2ms
-📄 uf50-0115.cn | Res: SAT   | E_min:   8.27 | Time: 735.3ms
-📄 uf50-0106.cn | Res: SAT   | E_min:   0.00 | Time: 692.7ms
-📄 uuf50-0103.c | Res: UNSAT | E_min:   2.29 | Time: 816.6ms
-📄 uuf50-010.cn | Res: UNSAT | E_min:   1.12 | Time: 778.4ms
-📄 uuf50-0111.c | Res: UNSAT | E_min:   2.11 | Time: 719.6ms
-📄 uuf50-01.cnf | Res: UNSAT | E_min:   1.96 | Time: 782.2ms
-📄 uuf50-0115.c | Res: UNSAT | E_min:   1.08 | Time: 769.6ms
-📄 uf50-01000.c | Res: SAT   | E_min:   0.00 | Time: 739.0ms
-📄 uf50-0117.cn | Res: SAT   | E_min:   0.04 | Time: 1275.0ms
-📄 uuf50-0116.c | Res: UNSAT | E_min:   1.03 | Time: 2367.7ms
-📄 uf50-0101.cn | Res: SAT   | E_min:   0.00 | Time: 760.4ms
-📄 uf50-0124.cn | Res: SAT   | E_min:   1.12 | Time: 711.4ms
-📄 uf50-0107.cn | Res: SAT   | E_min:   0.00 | Time: 735.7ms
-📄 uuf50-0124.c | Res: UNSAT | E_min:   7.00 | Time: 755.3ms
-📄 uf50-0118.cn | Res: UNSAT | E_min:   1.56 | Time: 724.7ms
-📄 uuf50-0108.c | Res: UNSAT | E_min:   1.06 | Time: 738.9ms
-📄 uf50-012.cnf | Res: SAT   | E_min:   0.00 | Time: 741.3ms
-📄 uf50-01.cnf  | Res: SAT   | E_min:   0.00 | Time: 743.7ms
-📄 uuf50-0110.c | Res: UNSAT | E_min:   1.01 | Time: 736.0ms
-📄 uf50-0120.cn | Res: UNSAT | E_min:   2.89 | Time: 743.4ms
-📄 uuf50-0118.c | Res: UNSAT | E_min:   9.66 | Time: 760.9ms
-📄 uf50-0114.cn | Res: SAT   | E_min:   0.01 | Time: 687.9ms
-📄 uf50-0123.cn | Res: SAT   | E_min:   0.00 | Time: 732.4ms
-📄 uuf50-0106.c | Res: UNSAT | E_min:  12.04 | Time: 2328.0ms
-📄 uf50-0121.cn | Res: UNSAT | E_min:   1.07 | Time: 1359.6ms
-📄 uuf50-0114.c | Res: UNSAT | E_min:   1.06 | Time: 716.3ms
-📄 uf50-0109.cn | Res: SAT   | E_min:   0.84 | Time: 728.5ms
-📄 uuf50-0102.c | Res: UNSAT | E_min:   1.08 | Time: 748.7ms
-📄 uuf50-0109.c | Res: UNSAT | E_min:   1.02 | Time: 730.3ms
-📄 uuf50-0100.c | Res: UNSAT | E_min:   2.98 | Time: 746.9ms
-📄 uuf50-0119.c | Res: UNSAT | E_min:   1.03 | Time: 759.3ms
-📄 uf50-011.cnf | Res: SAT   | E_min:   0.00 | Time: 843.2ms
-📄 uuf50-0112.c | Res: UNSAT | E_min:   1.07 | Time: 738.3ms
-📄 uuf50-0122.c | Res: UNSAT | E_min:   1.12 | Time: 773.8ms
-📄 uf50-0100.cn | Res: UNSAT | E_min:   1.02 | Time: 748.9ms
-📄 uf50-0122.cn | Res: SAT   | E_min:   0.00 | Time: 891.9ms
-📄 uuf50-0104.c | Res: UNSAT | E_min:   1.30 | Time: 922.7ms
-📄 uf50-0102.cn | Res: SAT   | E_min:   0.15 | Time: 1096.5ms
-📄 uuf50-0101.c | Res: UNSAT | E_min:   1.96 | Time: 2603.9ms
-📄 uuf50-0117.c | Res: UNSAT | E_min:   1.24 | Time: 878.6ms
-📄 uuf50-011.cn | Res: UNSAT | E_min:   1.02 | Time: 846.1ms
-📄 uf50-0103.cn | Res: SAT   | E_min:   0.00 | Time: 685.2ms
-📄 uuf50-0121.c | Res: UNSAT | E_min:   1.09 | Time: 770.1ms
-📄 uf50-0105.cn | Res: SAT   | E_min:   0.00 | Time: 757.2ms
-📄 uf50-0110.cn | Res: SAT   | E_min:   0.00 | Time: 719.0ms
-📄 uf50-0111.cn | Res: SAT   | E_min:   0.00 | Time: 742.1ms
-📄 uf50-0113.cn | Res: SAT   | E_min:   0.00 | Time: 732.9ms
-📄 uuf50-0113.c | Res: UNSAT | E_min:   1.25 | Time: 765.0ms
-📄 uf50-010.cnf | Res: SAT   | E_min:   0.00 | Time: 713.1ms
-📄 uf50-0104.cn | Res: SAT   | E_min:   0.00 | Time: 718.7ms
-📄 uuf50-0107.c | Res: UNSAT | E_min:   1.05 | Time: 764.9ms
 
 ---
 
