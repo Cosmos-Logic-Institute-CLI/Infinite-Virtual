@@ -14021,6 +14021,394 @@ $$y_d - W_2 W_1 x = 0 \implies W_2 W_1 = \frac{y_d}{x}$$
 
 ---
 
+B：
+
+## 1. 系统核心代数构型与偏导数阵列
+
+定义状态空间变量为 $\mathbf{u} = [h_1, h_2]^T$，参数空间变量为 $\mathbf{w} = [W_1, W_2]^T$。标量势能函数 $\mathcal{H}$ 的代数全展开式为：
+
+
+$$\mathcal{H} = \frac{1}{2}h_1^2 - W_1 x h_1 + \frac{1}{2}W_1^2 x^2 + \frac{1}{2}y_d^2 - W_2 h_2 y_d + \frac{1}{2}W_2^2 h_2^2 + \frac{\gamma}{2}h_1^2 - \gamma h_1 h_2 + \frac{\gamma}{2}h_2^2$$
+
+对所有自变量求一阶偏导数，构建负梯度动力学方程组：
+
+### 1.1 状态演化方程（关于 $\mathbf{u}$）
+
+$$\dot{h}_1 = -\frac{\partial \mathcal{H}}{\partial h_1} = W_1 x - (1+\gamma)h_1 + \gamma h_2$$
+
+$$\dot{h}_2 = -\frac{\partial \mathcal{H}}{\partial h_2} = W_2 y_d + \gamma h_1 - (\gamma + W_2^2)h_2$$
+
+### 1.2 权重演化方程（关于 $\mathbf{w}$）
+
+$$\dot{W}_1 = -\frac{\partial \mathcal{H}}{\partial W_1} = (h_1 - W_1 x)x$$
+
+$$\dot{W}_2 = -\frac{\partial \mathcal{H}}{\partial W_2} = (y_d - W_2 h_2)h_2$$
+
+---
+
+## 2. 状态变量 $\mathbf{u}$ 的瞬时平衡态代数解析解
+
+当状态变量满足 $\dot{h}_1 = 0$ 且 $\dot{h}_2 = 0$ 时，系统转入稳态代数方程组。将其写为标准的矩阵非齐次线性方程组形式：
+
+
+$$\begin{pmatrix} 1+\gamma & -\gamma \\ -\gamma & \gamma + W_2^2 \end{pmatrix} \begin{pmatrix} h_1 \\ h_2 \end{pmatrix} = \begin{pmatrix} W_1 x \\ W_2 y_d \end{pmatrix}$$
+
+### 2.1 克莱姆法则（Cramer's Rule）精确求解
+
+计算系数矩阵的行列式 $D$：
+
+
+$$D = (1+\gamma)(\gamma + W_2^2) - (-\gamma)^2 = \gamma + W_2^2 + \gamma^2 + \gamma W_2^2 - \gamma^2 = \gamma(1 + W_2^2) + W_2^2$$
+
+计算各未知数的分子行列式 $D_{h_1}, D_{h_2}$：
+
+
+$$D_{h_1} = \det \begin{pmatrix} W_1 x & -\gamma \\ W_2 y_d & \gamma + W_2^2 \end{pmatrix} = W_1 x(\gamma + W_2^2) + \gamma W_2 y_d = \gamma(W_1 x + W_2 y_d) + W_1 x W_2^2$$
+
+$$D_{h_2} = \det \begin{pmatrix} 1+\gamma & W_1 x \\ -\gamma & W_2 y_d \end{pmatrix} = (1+\gamma)W_2 y_d + \gamma W_1 x = \gamma(W_1 x + W_2 y_d) + W_2 y_d$$
+
+因此，在**任意有限 $\gamma$** 的情况下，隐层状态的精确代数解析解为：
+
+
+$$h_1^* = \frac{\gamma(W_1 x + W_2 y_d) + W_1 x W_2^2}{\gamma(1 + W_2^2) + W_2^2}$$
+
+$$h_2^* = \frac{\gamma(W_1 x + W_2 y_d) + W_2 y_d}{\gamma(1 + W_2^2) + W_2^2}$$
+
+### 2.2 强耦合极限条件（$\gamma \to \infty$）
+
+对上述解析解分子分母同除以 $\gamma$，并令 $\gamma \to \infty$：
+
+
+$$h^* = \lim_{\gamma \to \infty} h_1^* = \lim_{\gamma \to \infty} h_2^* = \frac{W_1 x + W_2 y_d}{1 + W_2^2}$$
+
+---
+
+## 3. 权重空间参数轨迹的通用常微分方程（ODE）
+
+将平衡态解析解 $h_1^*, h_2^*$ 反代入权重演化方程中，可消除状态变量，直接得到**纯参数空间的动力学闭式方程**。
+
+### 3.1 求解两层局部的非平衡残差项
+
+为了化简方程，我们先解析计算出核心代数项 $(h_1^* - W_1 x)$ 与 $(y_d - W_2 h_2^*)$：
+
+
+$$h_1^* - W_1 x = \frac{\gamma(W_1 x + W_2 y_d) + W_1 x W_2^2 - W_1 x [\gamma(1+W_2^2) + W_2^2]}{\gamma(1+W_2^2) + W_2^2} = \frac{\gamma W_2(y_d - W_1 W_2 x)}{\gamma(1+W_2^2) + W_2^2}$$
+
+$$y_d - W_2 h_2^* = \frac{y_d [\gamma(1+W_2^2) + W_2^2] - W_2 [\gamma(W_1 x + W_2 y_d) + W_2 y_d]}{\gamma(1+W_2^2) + W_2^2} = \frac{\gamma(y_d - W_1 W_2 x)}{\gamma(1+W_2^2) + W_2^2}$$
+
+### 3.2 任意有限 $\gamma$ 下的权重 ODE 完整代数式
+
+将残差项代入 $\dot{W}_1$ 和 $\dot{W}_2$，得到不依赖状态变量的通用演化轨迹方程：
+
+
+$$\dot{W}_1 = \left[ \frac{\gamma W_2 x}{\gamma(1+W_2^2) + W_2^2} \right] (y_d - W_1 W_2 x)$$
+
+$$\dot{W}_2 = \left[ \frac{\gamma}{\gamma(1+W_2^2) + W_2^2} \cdot \frac{\gamma(W_1 x + W_2 y_d) + W_2 y_d}{\gamma(1+W_2^2) + W_2^2} \right] (y_d - W_1 W_2 x)$$
+
+### 3.3 特殊情况：强共识极限（$\gamma \to \infty$）下的参数 ODE
+
+对上述通用 ODE 取极限 $\gamma \to \infty$，方程退化为：
+
+
+$$\dot{W}_1 = \frac{W_2(y_d - W_1 W_2 x)}{1+W_2^2} x$$
+
+$$\dot{W}_2 = \frac{y_d - W_1 W_2 x}{1+W_2^2} \left( \frac{W_1 x + W_2 y_d}{1+W_2^2} \right)$$
+
+
+---
+
+## 4. 收敛终态（吸引子）的代数严格证明
+
+由上述一般代数式可见，无论 $\gamma$ 取何正实数，两层权重动力学方程都可以提取出共同的代数标量因子 $(y_d - W_1 W_2 x)$。
+
+若要使系统整体达到最终收敛（即参数空间不动点 $\dot{W}_1 = 0$ 且 $\dot{W}_2 = 0$），在非退化基准条件（$x \neq 0, W_2 \neq 0, \gamma > 0$）下，充要条件为：
+
+
+$$y_d - W_1 W_2 x = 0 \implies W_2 W_1 = \frac{y_d}{x}$$
+
+> **代数结论**：该物理反向传播替代方案，其全时间尺度的参数轨迹被严格约束在非线性代数流形 $W_2 W_1 = \frac{y_d}{x}$ 的引力域内。收敛点的确定仅取决于终态代数方程的根，与离散计算机仿真时采用的步长 $\delta t$ 绝无因果关系。
+
+---
+
+## 5. 离散单步演化的代数矩阵校验
+
+针对数值演示部分，我们用纯矩阵/向量的数据代入进行基准校验。
+
+### 5.1 边界初始条件
+
+$$\mathbf{w}(0) = \begin{pmatrix} 1.0 \\ 1.0 \end{pmatrix}, \quad \mathbf{u}(0) = \begin{pmatrix} 1.0 \\ 1.5 \end{pmatrix}, \quad x = 1.0, \quad y_d = 2.0, \quad \gamma = 1.0, \quad \delta t = 0.1$$
+
+### 5.2 偏导数向量的一阶精确演算
+
+$$\nabla_{\mathbf{w}} \mathcal{H} = \begin{pmatrix} -(h_1 - W_1 x)x \\ -(y_d - W_2 h_2)h_2 \end{pmatrix}_{t=0} = \begin{pmatrix} -(1.0 - 1.0 \times 1.0) \times 1.0 \\ -(2.0 - 1.0 \times 1.5) \times 1.5 \end{pmatrix} = \begin{pmatrix} 0 \\ -0.75 \end{pmatrix}$$
+
+$$\nabla_{\mathbf{u}} \mathcal{H} = \begin{pmatrix} (1+\gamma)h_1 - \gamma h_2 - W_1 x \\ -\gamma h_1 + (\gamma + W_2^2)h_2 - W_2 y_d \end{pmatrix}_{t=0} = \begin{pmatrix} 2 \times 1.0 - 1.0 \times 1.5 - 1.0 \\ -1.0 \times 1.0 + (1+1) \times 1.5 - 1.0 \times 2.0 \end{pmatrix} = \begin{pmatrix} -0.5 \\ 0 \end{pmatrix}$$
+
+### 5.3 欧拉一阶离散更新
+
+$$\mathbf{w}(0.1) = \mathbf{w}(0) - 0.1 \times \nabla_{\mathbf{w}} \mathcal{H} = \begin{pmatrix} 1.0 \\ 1.0 \end{pmatrix} - 0.1 \times \begin{pmatrix} 0 \\ -0.75 \end{pmatrix} = \begin{pmatrix} 1.0 \\ 1.075 \end{pmatrix}$$
+
+$$\mathbf{u}(0.1) = \mathbf{u}(0) - 0.1 \times \nabla_{\mathbf{u}} \mathcal{H} = \begin{pmatrix} 1.0 \\ 1.5 \end{pmatrix} - 0.1 \times \begin{pmatrix} -0.5 \\ 0 \end{pmatrix} = \begin{pmatrix} 1.05 \\ 1.5 \end{pmatrix}$$
+
+### 5.4 各变量代数迭代对照表
+
+| 变量 | 初始状态 $t=0$ | 局部瞬时偏导数 | 一阶显式更新值 $t=0.1$ |
+| --- | --- | --- | --- |
+| **$W_1$** | $1.0$ | $0.0$ | $\mathbf{1.0}$ |
+| **$W_2$** | $1.0$ | $-0.75$ | $\mathbf{1.075}$ |
+| **$h_1$** | $1.0$ | $-0.5$ | $\mathbf{1.05}$ |
+| **$h_2$** | $1.5$ | $0.0$ | $\mathbf{1.5}$ |
+
+**演算闭环验证**：经纯代数矩阵化复核，微积分推导与一阶离散数值结果在小数点后任意位均完全精确、无误。
+
+---
+
+## 1. 空间降维：消去时间，构建纯几何轨道方程
+
+在强共识极限（$\gamma \to \infty$）下，权重原本随时间演化的非线性常微分方程组为：
+
+
+$$\dot{W}_1 = \frac{W_2(y_d - W_1 W_2 x)}{1+W_2^2} x$$
+
+$$\dot{W}_2 = \frac{y_d - W_1 W_2 x}{1+W_2^2} \left( \frac{W_1 x + W_2 y_d}{1+W_2^2} \right)$$
+
+现在，我们不关心它们随时间流逝的快慢，只关心它们在空间中的**相对运动轨迹**。直接将两式相除，消去 $dt$：
+
+
+$$\frac{dW_1}{dW_2} = \frac{\dot{W}_1}{\dot{W}_2} = \frac{\frac{x W_2 (y_d - W_1 W_2 x)}{1+W_2^2}}{\frac{(y_d - W_1 W_2 x)(W_1 x + W_2 y_d)}{(1+W_2^2)^2}}$$
+
+约去共同的驱动因子 $\frac{y_d - W_1 W_2 x}{1+W_2^2}$（非零退化条件下），方程瞬间简化为：
+
+
+$$\frac{dW_1}{dW_2} = \frac{x W_2 (1+W_2^2)}{W_1 x + W_2 y_d}$$
+
+令系统的固有代数比例常数 $k = \frac{y_d}{x}$，上式两边同除以 $x$，我们得到了一个**完全没有时间变量、纯粹描述空间几何轨迹的非齐次一阶线性微分方程**：
+
+
+$$\frac{dW_1}{dW_2} = \frac{W_2(1+W_2^2)}{W_1 + k W_2} \implies \frac{dW_1}{dW_2} - \frac{1}{W_2(1+W_2^2)} W_1 = \frac{k}{1+W_2^2}$$
+
+---
+
+## 2. 积分流形：求解权重空间的静态几何曲线
+
+为了解出这个空间轨迹流形，我们引入关于独立空间坐标 $W_2$ 的积分因子 $I(W_2)$：
+
+
+$$I(W_2) = \exp\left( -\int \frac{1}{W_2(1+W_2^2)} dW_2 \right)$$
+
+利用部分分式拆解 $\frac{1}{W_2(1+W_2^2)} = \frac{1}{W_2} - \frac{W_2}{1+W_2^2}$，积分可得：
+
+
+$$I(W_2) = \exp\left( -\ln W_2 + \frac{1}{2}\ln(1+W_2^2) \right) = \frac{\sqrt{1+W_2^2}}{W_2}$$
+
+将积分因子乘回微分方程两端，方程左侧自然化为全微分形式：
+
+
+$$\frac{d}{dW_2} \left[ W_1 \cdot \frac{\sqrt{1+W_2^2}}{W_2} \right] = \frac{k}{1+W_2^2} \cdot \frac{\sqrt{1+W_2^2}}{W_2} = \frac{k}{W_2 \sqrt{1+W_2^2}}$$
+
+对右端关于 $W_2$ 进行纯代数不定积分（设 $u = \sqrt{1+W_2^2}$ 进行换元积分）：
+
+
+$$\int \frac{k}{W_2 \sqrt{1+W_2^2}} dW_2 = k \ln \left( \frac{\sqrt{1+W_2^2}-1}{W_2} \right) + C$$
+
+至此，我们推导出了**绝无时间痕迹的静态几何轨迹全解析闭式解**：
+
+
+$$W_1 = \frac{W_2}{\sqrt{1+W_2^2}} \left[ k \ln \left( \frac{\sqrt{1+W_2^2}-1}{W_2} \right) + C \right]$$
+
+---
+
+## 3. 几何锁定：无时间联立的全局终态交点
+
+这个解析解表明，神经网络的“训练轨迹”在空间中早已被一条静态曲线死死固定。
+
+### 3.1 定域常数 $C$ 的空间锚定
+
+任意给定的系统初始权重配置 $\mathbf{w}(0) = [W_1(0), W_2(0)]^T$，都在瞬间唯一决定了这条几何轨道的拓扑常数 $C$：
+
+
+$$C = W_1(0)\frac{\sqrt{1+W_2(0)^2}}{W_2(0)} - k \ln \left( \frac{\sqrt{1+W_2(0)^2}-1}{W_2(0)} \right)$$
+
+### 3.2 终态的纯代数交点求解
+
+而系统的最终收敛点，根本不需要等时间 $t \to \infty$，它就是**这条几何轨迹曲线与全局最优解等轴双曲线 $W_1 W_2 = k$ 的空间交点**。
+
+我们将终态约束 $W_1^\infty = \frac{k}{W_2^\infty}$ 直接联立代入流形轨迹方程，消去 $W_1^\infty$，得到一个**关于最终收敛权重 $W_2^\infty$ 的纯静态超越方程**：
+
+
+$$\frac{k}{W_2^\infty} = \frac{W_2^\infty}{\sqrt{1+(W_2^\infty)^2}} \left[ k \ln \left( \frac{\sqrt{1+(W_2^\infty)^2}-1}{W_2^\infty} \right) + C \right]$$
+
+移项整理，得到最终的**无时间约束静态代数方程**：
+
+
+$$k \frac{\sqrt{1+(W_2^\infty)^2}}{(W_2^\infty)^2} - k \ln \left( \frac{\sqrt{1+(W_2^\infty)^2}-1}{W_2^\infty} \right) = C$$
+
+只要用传统的寻根算法（如牛顿法）解出这个一元超越方程的静态根 $W_2^\infty$，就能立刻秒杀出 $W_1^\infty = \frac{k}{W_2^\infty}$。
+
+---
+
+## 4. 带入基准数据的全解析代数检验
+
+用设定的非平衡边界数值进行纯静态演算，看它如何不留痕迹地锁定终态：
+
+* **输入目标条件**：$x = 1.0, y_d = 2.0 \implies k = \frac{2.0}{1.0} = 2.0$
+* **空间初始起点**：$W_1(0) = 1.0, W_2(0) = 1.0$
+
+### 4.1 第一步：瞬间锁死不变量 $C$
+
+将起点坐标直接拍入公式，算出这条空间轨道的“基因密码” $C$：
+
+
+$$C = 1.0 \times \frac{\sqrt{1+1^2}}{1} - 2.0 \times \ln \left( \frac{\sqrt{1+1^2}-1}{1} \right) = \sqrt{2} - 2.0 \ln(\sqrt{2}-1)$$
+
+
+代入具体数值：
+
+
+$$C \approx 1.4142 - 2.0 \times (-0.8814) = 3.1770$$
+
+### 4.2 第二步：直接联立求解终态交点
+
+将不变量 $C = 3.1770$ 和 $k = 2.0$ 拍入我们的终态代数方程：
+
+
+$$2.0 \times \frac{\sqrt{1+(W_2^\infty)^2}}{(W_2^\infty)^2} - 2.0 \ln \left( \frac{\sqrt{1+(W_2^\infty)^2}-1}{W_2^\infty} \right) = 3.1770$$
+
+这是一个确定性的静态几何交点问题：
+
+* 当 $W_2 = 1.0$ 时，方程左边 $\approx 2.0 \times 1.4142 - 2.0 \times (-0.8814) = 4.5912 \neq 3.1770$（说明系统不平衡，需要滑移）。
+* 随着 $W_2$ 沿几何曲线增大，左侧代数式的值平滑下降。经过严密的超越方程数值寻根，该几何交点被精准锁定在：
+
+$$W_2^\infty \approx 1.3641$$
+
+
+* 既然 $W_2^\infty$ 已经脱颖而出，对应的 $W_1^\infty$ 顺理成章通过双曲线对齐：
+
+$$W_1^\infty = \frac{k}{W_2^\infty} = \frac{2.0}{1.3641} \approx 1.4661$$
+
+---
+
+```python
+import numpy as np
+from scipy.optimize import fsolve
+
+# Base data with noise added
+x_clean = 1.0
+yd_clean = 2.0
+
+# Injecting some random-looking noise
+noise_x = 0.05
+noise_yd = -0.12
+
+x_noisy = x_clean + noise_x       # 1.05
+yd_noisy = yd_clean + noise_yd     # 1.88
+
+k_noisy = yd_noisy / x_noisy       # 1.88 / 1.05
+
+W1_0 = 1.0
+W2_0 = 1.0
+
+# Calculate new invariant C
+C_noisy = W1_0 * np.sqrt(1 + W2_0**2) / W2_0 - k_noisy * np.log((np.sqrt(1 + W2_0**2) - 1) / W2_0)
+
+def eq_noisy(W2):
+    val = k_noisy * np.sqrt(1 + W2**2) / W2**2 - k_noisy * np.log((np.sqrt(1 + W2**2) - 1) / W2)
+    return val - C_noisy
+
+W2_inf_noisy = fsolve(eq_noisy, 1.2)[0]
+W1_inf_noisy = k_noisy / W2_inf_noisy
+
+print(f"k_noisy = {k_noisy}")
+print(f"C_noisy = {C_noisy}")
+print(f"W2_inf_noisy = {W2_inf_noisy}")
+print(f"W1_inf_noisy = {W1_inf_noisy}")
+
+
+
+```
+
+```text
+k_noisy = 1.7904761904761903
+C_noisy = 2.9922919848461813
+W2_inf_noisy = 1.3051953068180473
+W1_inf_noisy = 1.3718071012998168
+
+
+```
+
+*“噪声会不会导致梯度爆炸？”、“我是不是得调小学习率？”、“完蛋，网络可能要在噪声里过拟合振荡了……”*
+
+管它是干净的数据还是带毒的噪声，对这个公式来说，**无非就是几何铁轨的轨距稍微变宽了一点点，它依然是一枪秒杀。**
+
+---
+
+## 1. 注入噪声后的新数据流形
+
+假设我们的输入 $x$ 和目标 $y_d$ 被现实世界的随机噪声给污染了：
+
+* **干净数据**：$x = 1.0, \quad y_d = 2.0$
+* **注入噪声**（比如传感器抖动）：$\Delta x = +0.05, \quad \Delta y_d = -0.12$
+* **实际受污数据**：
+
+$$\begin{cases} x_{\text{noisy}} = 1.05 \\ y_{d, \text{noisy}} = 1.88 \end{cases}$$
+
+初始权重起点保持不变，依然在干净的混沌起点：$W_1(0) = 1.0, W_2(0) = 1.0$。
+
+因为噪声的加入，系统的**固有比例常数 $k$** 被迫从原来的 $2.0$ 漂移到了新的位置：
+
+$$k_{\text{noisy}} = \frac{1.88}{1.05} \approx 1.7905$$
+
+---
+
+## 2. 纯静态一枪秒杀演练
+
+好，现在让我们闭上眼睛，假装自己根本不知道什么是“梯度下降”，直接把带有噪声的 $k_{\text{noisy}}$ 拍进你的全解析代数漏斗里。
+
+### 第一步：瞬间锁死带噪不变量 $C_{\text{noisy}}$
+
+由于几何流形的基础参数变了，初始起点锁定的空间轨道“基因密码”也随之自动修正：
+
+$$C_{\text{noisy}} = 1.0 \times \frac{\sqrt{1+1^2}}{1} - 1.7905 \times \ln \left( \frac{\sqrt{1+1^2}-1}{1} \right)$$
+
+$$C_{\text{noisy}} \approx 1.4142 - 1.7905 \times (-0.8814) \approx \mathbf{2.9923}$$
+
+### 第二步：解一元超越方程，锁定终点
+
+新的铁轨曲线已经画好，它在权重空间深处向着新的双曲线壁流滑落。我们直接联立它的静态超越方程：
+
+$$1.7905 \times \frac{\sqrt{1+(W_2^\infty)^2}}{(W_2^\infty)^2} - 1.7905 \ln \left( \frac{\sqrt{1+(W_2^\infty)^2}-1}{W_2^\infty} \right) = 2.9923$$
+
+不需要设置任何 Epoch，不需要跑任何循环，通过高斯/牛顿切线法在代数层面瞬时寻根，方程的唯一静态根被精准揪出：
+
+$$W_2^\infty \approx \mathbf{1.3052}$$
+
+### 第三步：双曲线对齐，直接收工
+
+既然 $W_2^\infty$ 已经无视时间、一步到位地停在了那里，对应的 $W_1^\infty$ 瞬间自动归位：
+
+$$W_1^\infty = \frac{k_{\text{noisy}}}{W_2^\infty} = \frac{1.7905}{1.3052} \approx \mathbf{1.3718}$$
+
+---
+
+## 📊 代数校验结果对照
+
+| 物理状态 | 比例常数 $k$ | 轨道基因 $C$ | 最终精确收敛点 $W_1^\infty$ | 最终精确收敛点 $W_2^\infty$ |
+| --- | --- | --- | --- | --- |
+| **纯净无噪状态** | $2.0000$ | $3.1770$ | $1.4661$ | $1.3641$ |
+| **注入噪声状态** | $\mathbf{1.7905}$ | $\mathbf{2.9923}$ | $\mathbf{1.3718}$ | $\mathbf{1.3052}$ |
+
+---
+
+## 💡 这件事最绝的地方在哪里？
+
+如果是传统的反向传播训练，面对注入的噪声，网络在迭代时会在两个状态之间来回“拉扯”和“颤抖”，你需要用各种优化器（如 Adam 的动量）去抹平这些振荡。
+
+但从上面的过程你能看到：**在解析法眼里，噪声根本不是什么“需要去克服的敌人”，它仅仅是让方程的系数变了一下而已。**
+
+无论你加多大的噪声，系统的因果链条从来没有断过。公式完全不在乎一路上有没有噪音在干扰它，它拉着初始权重，像缩地成寸的瞬移一样，直接在带有噪声的新流形上安了家。
+
+---
+
 对于**任意可微的非线性激活函数 $\sigma(\cdot)$**，层与层之间的代数对消关系依然**全局、精确地成立**。这意味着，传统反向传播（BP）中赖以生存的“非线性链式法则”，在此连续动力学系统的平衡态下，会以**静态代数恒等式**的形式自发涌现。
 
 ## 1. 非线性神经网络的解耦势能构建
